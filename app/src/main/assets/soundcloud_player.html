@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rytm – odtwarzacz SoundCloud</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: transparent; overflow: hidden; }
+  #sc { width: 100%; height: 100%; border: 0; display: block; }
+</style>
+</head>
+<body>
+<!--
+  Oficjalny odtwarzacz SoundCloud (HTML5 Widget API: https://developers.soundcloud.com/docs/api/html5-widget).
+  Nie wymaga klucza API. Odtwarzacz jest widoczny w aplikacji (z logo i linkiem do SoundCloud),
+  a aplikacja steruje nim wyłącznie oficjalnymi metodami: play, pause, setVolume, seekTo, skip.
+-->
+<iframe id="sc" allow="autoplay; encrypted-media" scrolling="no" frameborder="no"></iframe>
+<script>
+  window.__rytmEvents = [];
+  function __post(name, payload) {
+    var data = payload === undefined ? "" : (typeof payload === "string" ? payload : JSON.stringify(payload));
+    window.__rytmEvents.push([name, data]);
+    try {
+      if (window.RytmBridge && typeof window.RytmBridge[name] === "function") window.RytmBridge[name](data);
+    } catch (e) { /* most do aplikacji niedostępny (np. testy w przeglądarce) */ }
+  }
+</script>
+<script src="https://w.soundcloud.com/player/api.js" onerror="__post('onApiError', 'api_load_failed')"></script>
+<script>
+var rytm = (function () {
+  var iframe = document.getElementById("sc");
+  var widget = null;
+  var cfg = { loop: true, volume: 100 };
+  var state = { ready: false, playing: false, index: 0, position: 0, wantPlay: false, volume: 100 };
+  var lastProgressPost = 0;
+
+  function soundInfo(s) {
+    if (!s) return null;
+    return {
+      title: s.title || "",
+      artist: (s.user && s.user.username) || "",
+      artwork: s.artwork_url || (s.user && s.user.avatar_url) || "",
+      permalink: s.permalink_url || "",
+      duration: s.duration || s.full_duration || 0
+    };
+  }
+
+  function reportSound() {
+    if (!widget) return;
+    widget.getCurrentSound(function (s) {
+      var info = soundInfo(s);
+      if (info) __post("onSound", info);
+    });
+    widget.getCurrentSoundIndex(function (idx) {
+      state.index = idx || 0;
+      __post("onIndex", String(state.index));
+    });
+  }
+
+  function bind() {
+    var E = SC.Widget.Events;
+    widget.bind(E.READY, function () {
+      state.ready = true;
+      widget.setVolume(cfg.volume);
+      reportSound();
+      __post("onReady", "");
+      if (state.wantPlay) widget.play();
+    });
+    widget.bind(E.PLAY, function () {
+      state.playing = true;
+      reportSound();
+      __post("onPlay", "");
+    });
+    widget.bind(E.PAUSE, function () {
+      state.playing = false;
+      __post("onPause", "");
+    });
+    widget.bind(E.FINISH, function () {
+      state.playing = false;
+      if (!cfg.loop) { __post("onFinish", ""); return; }
+      widget.getSounds(function (sounds) {
+        widget.getCurrentSoundIndex(function (idx) {
+          var count = (sounds && sounds.length) || 1;
+          if (count <= 1) {
+            widget.seekTo(0);
+            widget.play();
+          } else if (idx >= count - 1) {
+            widget.skip(0);
+            widget.play();
+          }
+          // W środku playlisty widżet sam przechodzi do następnego utworu.
+        });
+      });
+    });
+    widget.bind(E.PLAY_PROGRESS, function (e) {
+      state.position = e.currentPosition;
+      var now = Date.now();
+      if (now - lastProgressPost >= 1000) {
+        lastProgressPost = now;
+        __post("onProgress", { position: e.currentPosition, relative: e.relativePosition });
+      }
+    });
+    widget.bind(E.ERROR, function () { __post("onError", "widget_error"); });
+  }
+
+  return {
+    load: function (widgetUrl, autoPlay, volume, loop) {
+      cfg.volume = volume;
+      cfg.loop = !!loop;
+      state.wantPlay = !!autoPlay;
+      state.ready = false;
+      if (!window.SC || !SC.Widget) { __post("onApiError", "api_not_loaded"); return; }
+      iframe.src = widgetUrl;
+      widget = SC.Widget(iframe);
+      bind();
+    },
+    play: function () { state.wantPlay = true; if (widget && state.ready) widget.play(); },
+    pause: function () { state.wantPlay = false; if (widget && state.ready) widget.pause(); },
+    setVolume: function (v) {
+      cfg.volume = v;
+      state.volume = v;
+      if (widget && state.ready) widget.setVolume(v);
+    },
+    seekTo: function (ms) { if (widget && state.ready) widget.seekTo(ms); },
+    skip: function (i) { if (widget && state.ready) widget.skip(i); },
+    getVolume: function () {
+      if (widget && state.ready) widget.getVolume(function (v) { __post("onVolume", String(v)); });
+    },
+    snapshot: function () { return JSON.stringify(state); }
+  };
+})();
+__post("onPageLoaded", "");
+</script>
+</body>
+</html>
