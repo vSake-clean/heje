@@ -5,13 +5,28 @@ Rytm prowadzi Cię przez codzienne rutyny w czasie rzeczywistym. Gra muzyka z So
 W trybie ścisłym aplikacja nie czeka na potwierdzenia. Jeśli ścielenie łóżka ma trwać 15 sekund, po 15 sekundach od razu usłyszysz kolejne polecenie i możesz odejść od łóżka.
 
 - Bez kont, bez kluczy API, bez serwerów. Wszystko zapisuje się lokalnie na telefonie.
-- Gotowy plik do instalacji: **[`release/Rytm-1.0.0.apk`](release/Rytm-1.0.0.apk)** (Android 8.0 lub nowszy).
+- Gotowy plik do instalacji: **[`release/Rytm-1.1.0.apk`](release/Rytm-1.1.0.apk)** (Android 8.0 lub nowszy). Instaluje się jako aktualizacja wersji 1.0.0, a Twoje rutyny zostają.
+
+## Co nowego w 1.1.0
+
+- **Muzyka już się nie wyłącza, tylko przycisza.** Wersja 1.0.0 wstrzymywała muzykę, gdy silnik mowy telefonu albo przeglądarka przejmowały dźwięk. Teraz:
+  - Rytm nie używa własnego fokusu audio.
+  - Komunikaty są odtwarzane z nagrań przygotowanych przed sesją, a silnik mowy ich nie odtwarza.
+  - Specjalny „strażnik” wznawia muzykę, gdyby coś ją zatrzymało.
+- **Słuchawki i wygaszony ekran.** Odtwarzacz SoundCloud zostaje w oknie aplikacji także poza ekranem sesji, więc telefon nie usypia go przy wygaszonym ekranie. „Wstecz” podczas rutyny chowa aplikację zamiast ją zamykać. Przy podłączonych słuchawkach głos zawsze idzie do słuchawek, a nie do głośnika.
+- **Prywatne playlisty.** Linki prywatne (z kodem `s-…`), kod „Osadź” i linki API działają. Rytm zapamiętuje dokładny adres osadzenia podany przez SoundCloud. Twoje prywatne listy otwarte w przeglądarce wyboru (po zalogowaniu) są rozpoznawane automatycznie.
+- **9 przemyślanych rutyn z realistycznymi czasami** (tabela niżej). Przykłady z 1.0.0, których nie zmieniałeś, zostały zaktualizowane. Edytowane i własne rutyny zostają bez zmian.
+- **Mądrzejsze dopasowanie do godziny wyjścia.** Usuwa jak najmniej zadań. Przy 30 minutach do wyjścia wypada prysznic, a śniadanie zostaje skrócone do około 10 minut.
+- **Poprawione błędy:**
+  - pozycja utworu nie była zapamiętywana (muzyka po przeładowaniu wracała na początek);
+  - blokada uśpienia mogła wygasnąć po bardzo długiej pauzie;
+  - interfejs niepotrzebnie się przerysowywał.
 
 ---
 
 ## 1. Instalacja (dla użytkownika)
 
-1. Pobierz na telefon plik `release/Rytm-1.0.0.apk`. Na GitHubie otwórz plik i naciśnij **Download raw file**.
+1. Pobierz na telefon plik `release/Rytm-1.1.0.apk`. Na GitHubie otwórz plik i naciśnij **Download raw file**.
 2. Otwórz pobrany plik. Android zapyta o zgodę na instalację z tego źródła (przeglądarki lub menedżera plików). Zezwól i wróć.
 3. Naciśnij **Zainstaluj**. Jeśli pojawi się ostrzeżenie Play Protect, wybierz **Zainstaluj mimo to**. Aplikacja nie pochodzi ze Sklepu Play, dlatego system ostrzega.
 4. Uruchom **Rytm**.
@@ -27,14 +42,19 @@ Ekran powitalny prowadzi przez 4 kroki. Przy każdej zgodzie wyjaśnia, do czego
 3. **Polski głos**: test syntezy mowy. Jeśli telefon nie ma polskiego głosu, przycisk „Zainstaluj polski głos” otwiera instalację, np. „Usługi mowy Google”. Głos działa potem offline.
 4. **Muzyka**: krótkie wyjaśnienie, skąd brać muzykę. Logowanie do SoundCloud jest opcjonalne.
 
-Na start dostajesz 4 przykładowe rutyny. Możesz je edytować, kopiować i usuwać:
+Na start dostajesz 9 przykładowych rutyn. Czasy są realistyczne (tyle, ile czynność zwykle trwa), a zadania, które można skrócić lub pominąć, są oznaczone jako opcjonalne. Wszystko możesz edytować, kopiować i usuwać.
 
-| Rutyna | Co pokazuje |
-|---|---|
-| Poranne wstawanie | dokładny przykład z założeń: 00:10 wstań, 00:25 biurko, 00:40 ubrania, 01:40 łazienka, 02:10 higiena |
-| Przygotowanie do wyjścia | pobudka 6:45, wyjście 7:30; aplikacja pilnuje, żeby plan się zmieścił |
-| Sprzątanie pokoju | tryb elastyczny (przycisk „Zrobione”) i ostrzeżenia „Zostało 15 sekund” |
-| Wieczorne przygotowanie do snu | spokojniejsza głośność, komunikat „Dobranoc” |
+| Rutyna | Czas | Tryb | Co zawiera |
+|---|---|---|---|
+| Poranne wstawanie | ok. 10 min | ścisły | dokładny przykład z założeń (00:10 wstań, 00:25 biurko, 00:40 ubrania, 01:40 łazienka, 02:10–05:10 higiena), dalej ubieranie (3 min), łóżko, woda |
+| Poranek do szkoły lub pracy | 45 min (pobudka 6:30, wyjście 7:25) | ścisły | łazienka 3 min, prysznic 8 min, ubieranie 5 min, śniadanie 15 min, zęby 2,5 min, pakowanie, „klucze, telefon, portfel”; mówi „Masz…” i „Została jedna minuta” |
+| Szybki poranek | 18 min | ścisły | gdy zaspałeś: łazienka 4 min, ubieranie 4 min, szybkie śniadanie, wyjście |
+| Rozruch – poranne ćwiczenia | ok. 9 min | ścisły | 10 ćwiczeń po 40–60 s z przerwami 10–15 s, „Zostało dziesięć sekund” |
+| Nauka – dwa bloki skupienia | ok. 62 min | ścisły | 2 × 25 min skupienia (pomodoro), 5 min przerwy, plan i podsumowanie |
+| Sprzątanie pokoju | ok. 20 min | elastyczny | ubrania, naczynia, śmieci, biurko, łóżko, kurze i odkurzanie (opcjonalne) |
+| Obowiązki domowe | ok. 31 min | elastyczny | pranie, naczynia, blaty, śmieci, składanie prania, łazienka |
+| Wyjście z domu – lista | 5 min | ścisły | telefon, klucze, słuchawki, pogoda, światła, buty, drzwi |
+| Wieczorne przygotowanie do snu | ok. 26 min | ścisły | bez ekranu, rzeczy na jutro, prysznic, zęby 3 min, piżama, cicho (głos 75%, muzyka 65%) |
 
 ### Szybki start
 
@@ -47,13 +67,13 @@ Na start dostajesz 4 przykładowe rutyny. Możesz je edytować, kopiować i usuw
 ## 2. Jak działa harmonogram
 
 ### Godzina pobudki i wyjścia
-W edytorze podajesz, o której wstajesz i o której musisz wyjść. Aplikacja pokazuje dostępny czas, długość planu i zapas.
+Przykład: „Poranek do szkoły lub pracy” (pobudka 6:30, wyjście 7:25). W edytorze podajesz, o której wstajesz i o której musisz wyjść. Aplikacja pokazuje dostępny czas, długość planu i zapas.
 
 Jeśli zadania się nie mieszczą (np. masz 30 minut, a plan trwa 45), pojawia się konflikt i przycisk **Zaproponuj dopasowanie**. Propozycja obejmuje kolejno:
 
 1. skrócenie lub usunięcie przerw,
 2. proporcjonalne skrócenie zadań **opcjonalnych** (do ich minimalnego czasu),
-3. usunięcie zadań opcjonalnych.
+3. usunięcie jak najmniejszej liczby zadań opcjonalnych (pozostałe są tylko skracane). Przy 30 minutach zamiast 45 wypada prysznic, a śniadanie skraca się do ok. 10 minut.
 
 **Zadania obowiązkowe nigdy nie są zmieniane automatycznie.** Jeśli same się nie mieszczą, aplikacja to mówi i prosi o decyzję.
 
@@ -104,8 +124,15 @@ Propozycję widzisz przed zastosowaniem i możesz dalej edytować plan ręcznie.
 | Informacja o utworze | tytuł, wykonawca, stan (gra / wstrzymana / czeka na internet) |
 | Utrata internetu | muzyka czeka na sieć i wznawia się od zapamiętanego miejsca. **Harmonogram i głos działają dalej** |
 
+### Prywatne playlisty i utwory
+- **Link prywatny** (w SoundCloud: „Udostępnij” → „Kopiuj link”) zawiera kod dostępu `s-…`. Rytm go zachowuje. Wklej link albo użyj „Udostępnij → Rytm”.
+- **Kod „Osadź” (embed)** z SoundCloud też można wkleić: Rytm wyciągnie z niego adres odtwarzacza.
+- **Twoje prywatne listy w przeglądarce wyboru:** zaloguj się na stronie SoundCloud (opcjonalnie), otwórz listę i naciśnij „Wybierz”. Rytm odczyta link z kodem dostępu z danych strony.
+- Rytm zapisuje dokładny adres osadzenia, który podaje SoundCloud (oEmbed). Ten sam adres trafia do odtwarzacza.
+- Jeśli wybrałeś prywatną playlistę w wersji 1.0.0 (wtedy kod dostępu był gubiony), wybierz ją ponownie.
+
 ### Ograniczenia (bez upiększeń)
-- Widżet odtwarza tylko to, co SoundCloud pozwala osadzać. Utwory **SoundCloud Go+** zwykle grają jako **30-sekundowy fragment**. Utwory z wyłączonym osadzaniem, prywatne lub zablokowane w regionie mogą nie zagrać wcale. Aplikacja pokaże wtedy błąd i spróbuje ponownie, a rutyna trwa dalej.
+- Widżet odtwarza tylko to, co SoundCloud pozwala osadzać. Utwory **SoundCloud Go+** zwykle grają jako **30-sekundowy fragment**. Utwory z wyłączonym osadzaniem lub zablokowane w regionie mogą nie zagrać wcale. Prywatna lista **bez** kodu dostępu (link bez `s-…`) zagra tylko wtedy, gdy SoundCloud wpuści zalogowaną sesję. W razie problemu użyj linku prywatnego. Gdy coś nie gra, aplikacja pokaże błąd i ponowi próbę, a rutyna trwa dalej.
 - Muzyka z SoundCloud wymaga internetu. Głos i harmonogram działają bez niego.
 - Rytm nie pobiera muzyki, nie zapisuje jej na telefonie i nie omija ograniczeń SoundCloud.
 - Logowanie przez Google lub Apple może nie działać w przeglądarce wbudowanej (to blokada po stronie Google/Apple). Zaloguj się e-mailem albo pomiń logowanie: do wyszukiwania i odtwarzania nie jest potrzebne.
@@ -116,13 +143,16 @@ Propozycję widzisz przed zastosowaniem i możesz dalej edytować plan ręcznie.
 ## 4. Przyciszanie muzyki podczas komunikatów
 
 **W odtwarzaczu wbudowanym (domyślnie) funkcja działa w pełni:**
+- Muzyka **nigdy nie jest zatrzymywana na czas komunikatu.** Komunikaty są syntezowane do plików przed sesją i odtwarzane przez Rytm bez prośby o fokus audio. Dlatego silnik mowy telefonu nie może wstrzymać muzyki, co w 1.0.0 zdarzało się na części telefonów. Rytm nie prosi też o fokus audio dla muzyki.
 - Na czas polecenia muzyka **cichnie o 25%** (ustawiasz 10–60%, zalecane 20–30%), czyli gra na 75% poprzedniej głośności. Nigdy nie jest zatrzymywana ani wyciszana.
 - Przyciszanie zaczyna się **przed** komunikatem i jest płynne (krzywa bez skoków, ok. 0,4 s). Powrót do **dokładnie** poprzedniego poziomu też jest płynny (ok. 0,9 s).
 - Gdy komunikaty padają blisko siebie, muzyka **nie wraca** między nimi, bo ma przytrzymanie 1,2 s. Dzięki temu nie ma „pompowania”.
 - Zmieniana jest wyłącznie głośność samego odtwarzacza (`setVolume` widżetu). **Głośność telefonu pozostaje taka, jak ją ustawiłeś.**
 - Wszystkie parametry (siłę, płynność ściszania i powrotu, przytrzymanie) zmienisz w **Ustawienia → Przyciszanie muzyki**.
 
-**W trybie „aplikacja SoundCloud”:** Android nie pozwala jednej aplikacji ustawiać głośności drugiej. Rytm prosi więc system o przyciszenie innych aplikacji na czas komunikatu (AudioFocus „may duck”). Siłę przyciszenia ustala **Android** i zwykle jest wyraźnie mocniejsza niż 25%. Możesz też wyłączyć przyciszanie w tym trybie. Jeśli zależy Ci na delikatnym, regulowanym przyciszaniu, używaj odtwarzacza wbudowanego.
+**Gdyby coś jednak zatrzymało muzykę** (przycisk w słuchawkach Bluetooth, inna aplikacja, system), „strażnik” odtwarzania co 3 sekundy sprawdza stan odtwarzacza. Jeśli sesja trwa, wznawia muzykę, a gdy to nie pomaga, przeładowuje odtwarzacz od zapamiętanego miejsca. Muzyka zatrzymuje się tylko wtedy, gdy Ty wstrzymasz rutynę, podczas rozmowy telefonicznej i po zakończeniu rutyny.
+
+**W trybie „aplikacja SoundCloud”:** Android nie pozwala jednej aplikacji ustawiać głośności drugiej. Rytm prosi więc system o przyciszenie innych aplikacji na czas komunikatu (AudioFocus „may duck”). Siłę przyciszenia ustala **Android** i zwykle jest wyraźnie mocniejsza niż 25%. Niektóre aplikacje zamiast przyciszyć się wtedy **wstrzymują**. Jeśli tak robi u Ciebie aplikacja SoundCloud, ustaw w Ustawieniach „Nie przyciszaj”. Jeśli zależy Ci na delikatnym przyciszaniu bez zatrzymywania, używaj odtwarzacza wbudowanego (domyślnego).
 
 ---
 
@@ -147,19 +177,20 @@ Rytm **nie** prosi o dostęp do mikrofonu, kontaktów, lokalizacji ani stanu tel
 ## 6. Działanie w tle: czego się spodziewać
 
 - Rutyna działa jako **usługa pierwszoplanowa** z powiadomieniem, blokadą uśpienia CPU i sesją multimediów (sterowanie ze słuchawek i ekranu blokady). Tak działają odtwarzacze muzyki na Androidzie 8–15.
-- **Przy wygaszonym ekranie** głos i muzyka działają dalej. Ekran sesji można pokazać nad blokadą (ustawienie).
+- **Przy wygaszonym ekranie i w słuchawkach** głos i muzyka działają dalej. Odtwarzacz SoundCloud cały czas siedzi w oknie aplikacji (niewidoczny, gdy ekran sesji jest zamknięty), więc przeglądarka nie usypia go jak karty w tle. Podczas rutyny „Wstecz” na ekranie głównym tylko chowa aplikację. Najpewniej działa, gdy rutynę uruchomisz z aplikacji i potem wygasisz ekran. Ekran sesji można też pokazać nad blokadą (ustawienie).
+- **Słuchawki:** głos idzie tam, gdzie muzyka. Nawet gdy w ustawieniach wybrano „głośność budzika”, przy podłączonych słuchawkach (przewodowych, USB, Bluetooth) Rytm używa multimediów, bo dźwięk budzika Android puszcza też z głośnika. Przycisk play/pauza na słuchawkach wstrzymuje i wznawia całą rutynę.
 - **Połączenie telefoniczne:** komunikaty i muzyka są wstrzymywane na czas rozmowy, potem rutyna zachowuje się zgodnie z Twoim wyborem (tabela wyżej).
-- **Inna aplikacja przejmie dźwięk:** muzyka się wstrzymuje i wraca, gdy tamta skończy. Harmonogram trwa.
+- **Inna aplikacja zacznie grać:** Rytm nie zatrzymuje swojej muzyki (nie walczy o fokus audio). Wstrzymaj ją ręcznie, jeśli chcesz słuchać czegoś innego. Harmonogram trwa.
 - **Zamknięcie procesu przez system:** stan sesji jest zapisywany na bieżąco. Android zwykle sam uruchamia usługę ponownie. Jeśli tego nie zrobi, otwarcie aplikacji wznawia rutynę zgodnie z wybranym zachowaniem.
 - **Restart telefonu w trakcie rutyny:** Android 15 nie pozwala aplikacjom muzycznym startować samoczynnie po restarcie. Rytm pokaże powiadomienie „Dotknij, aby wznowić”. Budziki są ustawiane ponownie automatycznie.
 - **Agresywne oszczędzanie baterii** (część telefonów Xiaomi, Huawei, Oppo, Samsung): mimo zgody systemowej producent może zatrzymywać aplikacje w tle. Jeśli rutyna urywa się przy wygaszonym ekranie, dodaj Rytm do wyjątków w ustawieniach baterii producenta (instrukcje dla poszczególnych marek: dontkillmyapp.com).
-- **Rutyna z budzika** startuje o ustawionej godzinie, także przy zablokowanym telefonie. Komunikaty mogą wtedy iść na **głośności budzika** (domyślnie włączone), żeby było je słychać nawet przy ściszonych multimediach. Muzyka SoundCloud gra zawsze na głośności multimediów.
+- **Rutyna z budzika** startuje o ustawionej godzinie, także przy zablokowanym telefonie. Opcjonalnie komunikaty mogą wtedy iść na **głośności budzika**, żeby było je słychać nawet przy ściszonych multimediach. Od 1.1.0 jest to domyślnie wyłączone, a przy słuchawkach i tak nieużywane. Muzyka SoundCloud gra zawsze na głośności multimediów.
 
 ---
 
 ## 7. Co zostało przetestowane, a co nie
 
-### Przetestowane automatycznie (97 testów, wszystkie przechodzą)
+### Przetestowane automatycznie (123 testy, wszystkie przechodzą)
 Uruchomienie: `./gradlew testDebugUnitTest`.
 
 | Obszar | Testy |
@@ -177,14 +208,22 @@ Uruchomienie: `./gradlew testDebugUnitTest`.
 | Połączenia | „kontynuuj” (cisza w trakcie, potem „Teraz: …”), „wstrzymaj”, „wznów od bieżącego zadania” |
 | Planowanie wg pobudki/wyjścia | 30 min do wyjścia → plan ≤ 30 min, zadania obowiązkowe bez zmian, sytuacja niemożliwa zgłaszana |
 | Polszczyzna | „Masz trzydzieści sekund”, „Masz jedną minutę”, „Zostały dwie minuty”, „Została jedna minuta” itd. |
+| Muzyka nie gaśnie (1.1.0) | „strażnik” odtwarzania: wznowienie po niespodziewanej pauzie, tolerancja krótkiego buforowania, przeładowanie po kilku nieudanych próbach, brak walki bez internetu, zapętlenie liczone jako postęp |
+| Komunikaty z nagrań (1.1.0) | każde polecenie wypowiadane w sesji (także „Teraz: …” po pauzie, ostrzeżenia i koniec) jest w zestawie nagrań przygotowywanych przed startem |
+| Prywatne playlisty (1.1.0) | kody `s-…` w linkach list i utworów, `?secret_token=`, kod „Osadź”, adresy API, adres osadzenia odczytany z oEmbed, brak fałszywych trafień dla treści publicznych |
+| Przykładowe rutyny (1.1.0) | wszystkie przechodzą walidację bez za długich komunikatów, realistyczne czasy (np. zęby 2–3 min, śniadanie 10–20 min, prysznic 5–10 min), zapas przed wyjściem, dopasowanie 45 → 30 min usuwa tylko prysznic i skraca śniadanie |
+| Aktualizacja z 1.0.0 (1.1.0) | migracja bazy v1 → v2 na prawdziwym schemacie v1 (rutyny, budzik, muzyka i zadania zostają), podmiana tylko niezmienionych przykładów, edytowane i własne rutyny nietknięte |
 | Android (Robolectric) | baza Room (zapis, edycja, kopiowanie, kaskadowe usuwanie), DataStore, budzik w AlarmManager, **usługa pierwszoplanowa**: typ mediaPlayback, polecenie dokładnie po 10 s, sterowanie widżetem SoundCloud (`load`, `setVolume(75.0)`, `pause`), powiadomienie „Wstrzymano”, sprzątanie po zakończeniu, odtworzenie po zabiciu procesu |
 
 ### Przetestowane ręcznie / półautomatycznie
+- **1.1.0:** odczyt stanu odtwarzacza (`probe`: pauza/gra, pozycja) i wznowienie po wymuszonej pauzie sprawdzone na prawdziwym widżecie. Playlista w formacie adresu osadzenia (`api.soundcloud.com/playlists/…`) gra. Mobilna strona SoundCloud (User-Agent Androida) działa: wyszukiwanie list, strony playlist. Skrypt odczytu linku prywatnego nie daje fałszywych trafień dla list publicznych i poprawnie zwraca link z kodem dla listy prywatnej (symulacja metadanych strony; nie mam prawdziwej prywatnej listy do testu).
 - **Prawdziwy odtwarzacz SoundCloud** z naszego pliku `app/src/main/assets/soundcloud_player.html` w przeglądarce Chromium, z tym samym adresem bazowym co w aplikacji. Sprawdzone: wczytanie bez klucza API, tytuł, wykonawca i okładka utworu, odtwarzanie (rosnąca pozycja), `setVolume(75)` potwierdzone przez `getVolume() = 75`, pauza i wznowienie, zapętlanie po końcu utworu. Skrypty: `tools/soundcloud-widget-check/`.
 - **Kompilacja**: `assembleDebug`, `assembleRelease`, `lint` bez błędów, czysta kompilacja przez `./gradlew`. APK zweryfikowane narzędziem `apksigner`.
 
 ### Nieprzetestowane na fizycznym telefonie (brak urządzenia lub emulatora w środowisku budowania)
-- Odtwarzanie widżetu SoundCloud w **Android WebView przy wygaszonym ekranie** na prawdziwym telefonie. Rozwiązanie jest zgodne z zasadami Androida (usługa pierwszoplanowa, wysoki priorytet procesu renderującego WebView), ale nie zostało zmierzone na urządzeniu. Jeśli na Twoim telefonie muzyka przestanie grać po wygaszeniu ekranu, przełącz rutynę na „Odtwarzaj w aplikacji SoundCloud”. Harmonogram i głos działają niezależnie od muzyki.
+- Odtwarzanie widżetu SoundCloud w **Android WebView przy wygaszonym ekranie i w słuchawkach Bluetooth** na prawdziwym telefonie. W 1.1.0 dodałem kilka zabezpieczeń: WebView zawsze w oknie aplikacji i zgłaszający się jako widoczny, brak własnego fokusu audio, komunikaty z nagrań, strażnik odtwarzania, wysoki priorytet procesu WebView i usługa pierwszoplanowa. Mimo to nie zostało to zmierzone na urządzeniu. Jeśli muzyka mimo to milknie, daj znać (model telefonu), a w razie potrzeby użyj trybu „Odtwarzaj w aplikacji SoundCloud”.
+- Prywatna playlista z prawdziwego konta SoundCloud (sprawdzone na danych symulowanych i na formacie linków).
+- Odtwarzanie komunikatów z nagrań przez MediaPlayer na urządzeniu. W testach usługi sprawdzona jest ścieżka zapasowa (mowa bezpośrednia), z której Rytm korzysta, gdy nagranie nie jest gotowe.
 - Rzeczywiste brzmienie polskich głosów różnych producentów oraz zachowanie oszczędzania baterii u konkretnych producentów.
 - Wygląd interfejsu na różnych ekranach. Kod Compose się kompiluje i przechodzi lint, ale nie był oglądany na urządzeniu.
 
@@ -196,7 +235,7 @@ Wymagania: **Android Studio** (Ladybug 2024.2 lub nowsze) albo JDK 17+ i Android
 
 ```bash
 ./gradlew assembleRelease      # → app/build/outputs/apk/release/app-release.apk
-./gradlew testDebugUnitTest    # 97 testów
+./gradlew testDebugUnitTest    # 123 testy
 ./gradlew lintRelease
 ```
 
@@ -221,9 +260,10 @@ app/src/main/java/pl/rytm/app/
 │   ├── speech/ text/     szacowanie długości mowy, polskie liczebniki i odmiana
 ├── data/                 Room (rutyny), DataStore (ustawienia), zapis migawki sesji
 ├── service/              RoutineSessionService (usługa pierwszoplanowa mediaPlayback),
-│                         powiadomienia, MediaSession, wykrywanie połączeń, fokus audio
-├── music/                SoundCloudWidgetPlayer (oficjalny widżet w WebView), linki, oEmbed
-├── speech/               AndroidSpeech (TextToSpeech, pomiar długości przez syntezę do WAV)
+│                         powiadomienia, MediaSession, wykrywanie połączeń, słuchawki
+├── music/                SoundCloudWidgetPlayer (oficjalny widżet w WebView, „parking” w oknie aktywności),
+│                         PlaybackGuard (strażnik ciągłości muzyki), linki (także prywatne), oEmbed
+├── speech/               AndroidSpeech (TextToSpeech), ClipSpeechOutput (komunikaty z nagrań, bez fokusu audio)
 ├── alarm/                budzik rutyny (AlarmManager.setAlarmClock), odbiorniki systemowe
 └── ui/                   Jetpack Compose + Material 3 (MVVM): ekran główny, edytor,
                           wybór muzyki, aktywna sesja, ustawienia, pierwsze uruchomienie

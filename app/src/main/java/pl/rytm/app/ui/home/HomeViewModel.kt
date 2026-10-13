@@ -37,7 +37,7 @@ sealed interface HomeDialog {
     data class ConfirmDelete(val routine: Routine) : HomeDialog
 
     /** Udostępniony link SoundCloud – wybierz rutynę, do której go dodać. */
-    data class ShareTarget(val selection: MusicSelection) : HomeDialog
+    data class ShareTarget(val selection: MusicSelection, val warning: String? = null) : HomeDialog
     data class Message(val title: String, val text: String) : HomeDialog
 }
 
@@ -146,7 +146,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _busy.value = true
             when (val r = SoundCloudResolver().resolve(text)) {
-                is SoundCloudResolver.Result.Ok -> _dialog.value = HomeDialog.ShareTarget(r.selection)
+                is SoundCloudResolver.Result.Ok -> _dialog.value = HomeDialog.ShareTarget(r.selection, r.warning)
                 is SoundCloudResolver.Result.Error -> _dialog.value = HomeDialog.Message("Nie można dodać muzyki", r.message)
             }
             _busy.value = false

@@ -393,4 +393,20 @@ class SessionRunnerTest {
         // Bez komunikatów nie ma przyciszania (poza wyciszeniem muzyki po zakończeniu rutyny).
         assertTrue(h.music.volumes.filter { it.first < 310_000 }.all { abs(it.second - 100f) < 0.01f })
     }
+
+    @Test
+    fun `every spoken command is available as a pre-rendered clip`() = runTest {
+        val plan = planOf(routineOf(announcements = AnnouncementConfig(includeDuration = true, warningBeforeEndSec = 10)))
+        val h = Harness(this, plan)
+        h.startRunner()
+        h.advanceTo(30_000)
+        h.runner.pause()
+        h.scope.runCurrent()
+        h.runner.resume()
+        h.advanceTo(400_000)
+        val catalog = pl.rytm.app.domain.speech.SpeechCatalog.textsFor(plan).toSet()
+        val missing = h.speech.texts.filter { it !in catalog }
+        assertTrue("Brak w katalogu: $missing", missing.isEmpty())
+        assertTrue(h.speech.texts.any { it.startsWith("Teraz:") })
+    }
 }

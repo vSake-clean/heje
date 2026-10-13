@@ -51,8 +51,11 @@ data class AppSettings(
     val showOverLockScreen: Boolean = true,
     val externalDucking: ExternalDucking = ExternalDucking.SYSTEM,
     val voiceStream: VoiceStream = VoiceStream.MEDIA,
-    /** Dla sesji uruchamianych budzikiem komunikaty idą strumieniem budzika (słychać je nawet przy ściszonych multimediach). */
-    val alarmSessionsUseAlarmStream: Boolean = true,
+    /**
+     * Dla sesji uruchamianych budzikiem komunikaty idą strumieniem budzika (słychać je nawet przy ściszonych
+     * multimediach). Domyślnie wyłączone – przy słuchawkach i tak zawsze używamy multimediów.
+     */
+    val alarmSessionsUseAlarmStream: Boolean = false,
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -82,6 +85,23 @@ class SettingsRepository(private val context: Context) {
         val externalDucking = stringPreferencesKey("external_ducking")
         val voiceStream = stringPreferencesKey("voice_stream")
         val alarmSessionsUseAlarmStream = booleanPreferencesKey("alarm_sessions_alarm_stream")
+        val settingsVersion = intPreferencesKey("settings_version")
+    }
+
+    /** Jednorazowe poprawki ustawień po aktualizacji aplikacji. */
+    suspend fun migrateIfNeeded() {
+        context.dataStore.edit { p ->
+            val version = p[Keys.settingsVersion] ?: 1
+            if (version < 2) {
+                // 1.0.0 domyślnie kierował głos z budzika na głośnik – przy słuchawkach to przeszkadza.
+                p[Keys.alarmSessionsUseAlarmStream] = false
+            }
+            p[Keys.settingsVersion] = CURRENT_VERSION
+        }
+    }
+
+    private companion object {
+        const val CURRENT_VERSION = 2
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { fromPrefs(it) }

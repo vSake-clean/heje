@@ -30,6 +30,9 @@ interface RoutineDao {
     @Query("SELECT COUNT(*) FROM routines")
     suspend fun count(): Int
 
+    @Query("SELECT id, name, alarm_enabled, created_at, updated_at FROM routines")
+    suspend fun metas(): List<RoutineMeta>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertRoutine(routine: RoutineEntity): Long
 
@@ -53,7 +56,8 @@ interface RoutineDao {
 
     @Query(
         "UPDATE routines SET music_url = :url, music_title = :title, music_artist = :artist, " +
-            "music_artwork_url = :artwork, music_kind = :kind, music_playback = :playback, updated_at = :time WHERE id = :id",
+            "music_artwork_url = :artwork, music_kind = :kind, music_embed_url = :embedUrl, music_playback = :playback, " +
+            "updated_at = :time WHERE id = :id",
     )
     suspend fun setMusic(
         id: Long,
@@ -62,6 +66,7 @@ interface RoutineDao {
         artist: String?,
         artwork: String?,
         kind: String?,
+        embedUrl: String?,
         playback: String,
         time: Long,
     )

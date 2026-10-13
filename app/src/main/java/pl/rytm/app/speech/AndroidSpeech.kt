@@ -146,26 +146,37 @@ class AndroidSpeech(context: Context, initial: SpeechConfig = SpeechConfig()) : 
         }
     }
 
+    /** Aktualna konfiguracja (głośność, strumień) – używana też przy odtwarzaniu gotowych nagrań. */
+    val currentConfig: SpeechConfig get() = config
+
+    /**
+     * Syntezuje tekst do pliku WAV (bez odtwarzania – silnik mowy nie zajmuje wtedy dźwięku
+     * i nie może wstrzymać muzyki). Zwraca true, gdy plik powstał.
+     */
+    suspend fun synthesizeToFile(text: String, file: File, timeoutMs: Long = 20_000): Boolean {
+        if (availability != SpeechAvailability.READY || text.isBlank()) return false
+        val id = "measure-${System.nanoTime()}"
+        val done = CompletableDeferred<Boolean>()
+        pending[id] = done
+        file.parentFile?.mkdirs()
+        val result = runCatching { tts.synthesizeToFile(text, Bundle(), file, id) }.getOrDefault(TextToSpeech.ERROR)
+        if (result != TextToSpeech.SUCCESS) {
+            pending.remove(id)
+            return false
+        }
+        val ok = withTimeoutOrNull(timeoutMs) { done.await() } ?: false
+        pending.remove(id)
+        return ok && file.exists() && file.length() > 44
+    }
+
     /**
      * Mierzy rzeczywistą długość wypowiedzi wybranym głosem: syntezuje ją do pliku WAV
      * (bez odtwarzania) i odczytuje długość z nagłówka. Null, gdy pomiar się nie powiódł.
      */
     suspend fun measureDurationMs(text: String): Long? {
-        if (availability != SpeechAvailability.READY || text.isBlank()) return null
-        val id = "measure-${System.nanoTime()}"
-        val file = File(appContext.cacheDir, "$id.wav")
-        val done = CompletableDeferred<Boolean>()
-        pending[id] = done
-        val params = Bundle()
-        val result = tts.synthesizeToFile(text, params, file, id)
-        if (result != TextToSpeech.SUCCESS) {
-            pending.remove(id)
-            return null
-        }
-        val ok = withTimeoutOrNull(15_000) { done.await() } ?: false
-        pending.remove(id)
+        val file = File(appContext.cacheDir, "measure-${System.nanoTime()}.wav")
         return try {
-            if (ok && file.exists()) WavDuration.parseMs(file.readBytes()) else null
+            if (synthesizeToFile(text, file)) WavDuration.parseMs(file.readBytes()) else null
         } finally {
             file.delete()
         }

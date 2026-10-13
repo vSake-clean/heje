@@ -124,6 +124,16 @@ var rytm = (function () {
     },
     seekTo: function (ms) { if (widget && state.ready) widget.seekTo(ms); },
     skip: function (i) { if (widget && state.ready) widget.skip(i); },
+    /** Stan do „strażnika” odtwarzania: działa przez postMessage, także przy wygaszonym ekranie. */
+    probe: function () {
+      if (!widget || !state.ready) { __post("onProbe", { ready: false, paused: true, position: 0 }); return; }
+      widget.isPaused(function (p) {
+        widget.getPosition(function (pos) {
+          state.position = pos;
+          __post("onProbe", { ready: true, paused: !!p, position: Math.round(pos || 0) });
+        });
+      });
+    },
     getVolume: function () {
       if (widget && state.ready) widget.getVolume(function (v) { __post("onVolume", String(v)); });
     },

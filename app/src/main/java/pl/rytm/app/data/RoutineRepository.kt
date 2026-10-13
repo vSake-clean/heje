@@ -57,6 +57,7 @@ class RoutineRepository(private val dao: RoutineDao, private val now: () -> Long
         artist = music?.artist,
         artwork = music?.artworkUrl,
         kind = music?.kind?.name,
+        embedUrl = music?.embedUrl,
         playback = playback.name,
         time = now(),
     )
@@ -64,6 +65,31 @@ class RoutineRepository(private val dao: RoutineDao, private val now: () -> Long
     suspend fun seedIfEmpty() {
         if (dao.count() > 0) return
         SampleRoutines.all().forEach { save(it) }
+    }
+
+    /**
+     * Pierwsze uruchomienie: dodaje przykłady. Aktualizacja z wcześniejszej wersji: podmienia przykłady,
+     * których użytkownik NIE zmieniał, i dopisuje nowe. Własne i edytowane rutyny zostają nietknięte.
+     * @return liczba dodanych rutyn
+     */
+    suspend fun seedOrUpgradeSamples(meta: AppMeta): Int {
+        val stored = meta.samplesVersion
+        if (stored >= SampleRoutines.VERSION) return 0
+        val existing = dao.metas()
+        if (existing.isEmpty()) {
+            SampleRoutines.all().forEach { save(it) }
+            meta.samplesVersion = SampleRoutines.VERSION
+            return SampleRoutines.all().size
+        }
+        // Przykład z 1.0.0 uznajemy za niezmieniony, gdy od utworzenia nie był edytowany (ani nie ma budzika).
+        existing
+            .filter { it.name in SampleRoutines.V1_NAMES && !it.alarmEnabled && kotlin.math.abs(it.updatedAt - it.createdAt) < 5_000 }
+            .forEach { dao.delete(it.id) }
+        val names = dao.metas().map { it.name }.toSet()
+        val added = SampleRoutines.all().filter { it.name !in names }
+        added.forEach { save(it) }
+        meta.samplesVersion = SampleRoutines.VERSION
+        return added.size
     }
 }
 
@@ -76,6 +102,7 @@ internal fun RoutineWithTasks.toDomain(): Routine {
             artist = r.musicArtist.orEmpty(),
             artworkUrl = r.musicArtworkUrl,
             kind = enumOr(r.musicKind, MusicKind.TRACK),
+            embedUrl = r.musicEmbedUrl,
         )
     }
     return Routine(
@@ -135,6 +162,7 @@ internal fun Routine.toEntity(createdAt: Long, updatedAt: Long) = RoutineEntity(
     musicArtist = music?.artist,
     musicArtworkUrl = music?.artworkUrl,
     musicKind = music?.kind?.name,
+    musicEmbedUrl = music?.embedUrl,
     musicPlayback = musicPlayback.name,
     musicVolume = musicVolume,
     musicLoop = musicLoop,

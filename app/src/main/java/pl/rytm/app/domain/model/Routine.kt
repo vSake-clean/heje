@@ -48,6 +48,11 @@ data class MusicSelection(
     val artist: String = "",
     val artworkUrl: String? = null,
     val kind: MusicKind = MusicKind.TRACK,
+    /**
+     * Adres dla oficjalnego odtwarzacza dokładnie taki, jak w kodzie osadzenia z SoundCloud (oEmbed),
+     * np. `https://api.soundcloud.com/playlists/123?secret_token=s-abc` – działa też dla prywatnych playlist.
+     */
+    val embedUrl: String? = null,
 )
 
 @Serializable

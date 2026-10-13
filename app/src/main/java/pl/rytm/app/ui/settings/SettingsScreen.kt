@@ -225,7 +225,8 @@ private fun VoiceSection(s: AppSettings, vm: SettingsViewModel) {
         )
         SwitchRow(
             "Rutyny z budzika: głos na głośności budzika",
-            description = "Słychać polecenia rano, nawet gdy multimedia są ściszone.",
+            description = "Słychać polecenia rano, nawet gdy multimedia są ściszone. Gdy podłączone są słuchawki, " +
+                "głos zawsze idzie do słuchawek (strumień multimediów).",
             checked = s.alarmSessionsUseAlarmStream,
             onCheckedChange = { v -> vm.update { it.copy(alarmSessionsUseAlarmStream = v) } },
         )

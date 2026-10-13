@@ -26,6 +26,7 @@ data class RoutineEntity(
     @ColumnInfo(name = "music_artist") val musicArtist: String?,
     @ColumnInfo(name = "music_artwork_url") val musicArtworkUrl: String?,
     @ColumnInfo(name = "music_kind") val musicKind: String?,
+    @ColumnInfo(name = "music_embed_url") val musicEmbedUrl: String? = null,
     @ColumnInfo(name = "music_playback") val musicPlayback: String,
     @ColumnInfo(name = "music_volume") val musicVolume: Int,
     @ColumnInfo(name = "music_loop") val musicLoop: Boolean,
@@ -69,4 +70,13 @@ data class RoutineWithTasks(
     @Embedded val routine: RoutineEntity,
     @Relation(parentColumn = "id", entityColumn = "routine_id")
     val tasks: List<TaskEntity>,
+)
+
+/** Lekki odczyt rutyny (bez zadań) – np. do aktualizacji przykładów. */
+data class RoutineMeta(
+    val id: Long,
+    val name: String,
+    @ColumnInfo(name = "alarm_enabled") val alarmEnabled: Boolean,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
 )

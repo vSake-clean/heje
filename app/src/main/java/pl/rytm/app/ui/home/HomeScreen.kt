@@ -190,6 +190,7 @@ fun HomeScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("„${d.selection.title}”" + if (d.selection.artist.isNotBlank()) " – ${d.selection.artist}" else "")
+                    d.warning?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     routines.forEach { r ->
                         Text(

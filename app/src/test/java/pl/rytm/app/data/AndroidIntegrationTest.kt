@@ -79,7 +79,7 @@ class AndroidIntegrationTest {
         repo.seedIfEmpty()
         repo.seedIfEmpty()
         val all = repo.getAll()
-        assertEquals(4, all.size)
+        assertEquals(SampleRoutines.all().size, all.size)
         val morning = all.first { it.name == "Poranne wstawanie" }
         assertEquals(listOf(10, 25, 40, 100, 130), (0..4).map { TimelineBuilder.startSecOf(morning.tasks, it) })
     }

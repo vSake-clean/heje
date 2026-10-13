@@ -23,7 +23,8 @@ class RytmApp : Application() {
         container = AppContainer(this)
         Notifications.createChannels(this)
         container.appScope.launch {
-            container.routines.seedIfEmpty()
+            container.settings.migrateIfNeeded()
+            container.routines.seedOrUpgradeSamples(container.appMeta)
             container.alarms.rescheduleAll()
         }
     }
@@ -37,6 +38,7 @@ class AppContainer(val app: Application) {
     val settings: SettingsRepository by lazy { SettingsRepository(app) }
     val sessionStore: SessionStore by lazy { SessionStore(app) }
     val alarms: RoutineAlarmScheduler by lazy { RoutineAlarmScheduler(app, routines) }
+    val appMeta: pl.rytm.app.data.AppMeta by lazy { pl.rytm.app.data.AppMeta(app) }
     val hub: SessionHub get() = SessionHub
 }
 

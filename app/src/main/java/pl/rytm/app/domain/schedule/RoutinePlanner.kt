@@ -81,23 +81,21 @@ object RoutinePlanner {
         }
         if (deficit <= 0) return proposal(tasks, working, changes, total, availableSec)
 
-        // 3 (przygotowanie). Jeśli skracanie nie wystarczy – usuń zadania opcjonalne (zachłannie:
-        // najpierw najmniejsze, które samo pokrywa brak, w przeciwnym razie największe).
+        // 3 (przygotowanie). Jeśli samo skracanie nie wystarczy – usuń jak NAJMNIEJ zadań opcjonalnych,
+        // a przy remisie te, których usunięcie zabiera najmniej czasu (reszta zostanie tylko skrócona).
         fun compressible(list: List<RoutineTask>) =
             list.filter { !it.mandatory }.sumOf { it.durationSec - minDurationOf(it) }
 
-        while (deficit > compressible(working)) {
-            val optional = working.withIndex().filter { !it.value.mandatory }
-            if (optional.isEmpty()) break
-            val others = { idx: Int -> compressible(working.filterIndexed { i, _ -> i != idx }) }
-            val sufficient = optional
-                .filter { (idx, t) -> t.durationSec + t.gapBeforeSec + others(idx) >= deficit }
-                .minByOrNull { it.value.durationSec }
-            val victim = sufficient ?: optional.maxBy { it.value.durationSec }
-            val (idx, task) = victim
-            working = working.toMutableList().also { it.removeAt(idx) }
-            changes += Change.Removed(task.title, task.durationSec)
-            deficit -= task.durationSec + task.gapBeforeSec
+        if (deficit > compressible(working)) {
+            val toRemove = chooseRemovals(working, deficit)
+            if (toRemove.isNotEmpty()) {
+                toRemove.sortedDescending().forEach { idx ->
+                    val task = working[idx]
+                    changes += Change.Removed(task.title, task.durationSec)
+                    deficit -= task.durationSec + task.gapBeforeSec
+                }
+                working = working.filterIndexed { i, _ -> i !in toRemove }.toMutableList()
+            }
         }
         if (deficit <= 0) return proposal(tasks, working, changes, total, availableSec)
 
@@ -127,6 +125,39 @@ object RoutinePlanner {
             changes += Change.Shortened(t.title, t.durationSec, t.durationSec - cut)
         }
         return proposal(tasks, working, changes, total, availableSec)
+    }
+
+    /**
+     * Indeksy zadań opcjonalnych do usunięcia: najmniejsza liczba zadań, potem najmniej usuniętego czasu,
+     * tak by brakujący czas pokryło usunięcie + skrócenie pozostałych opcjonalnych do minimum.
+     */
+    private fun chooseRemovals(tasks: List<RoutineTask>, deficit: Int): Set<Int> {
+        val optional = tasks.indices.filter { !tasks[it].mandatory }
+        val room = optional.associateWith { tasks[it].durationSec - minDurationOf(tasks[it]) }
+        val freed = optional.associateWith { tasks[it].durationSec + tasks[it].gapBeforeSec }
+        val totalRoom = room.values.sum()
+        fun covers(set: Set<Int>) = set.sumOf { freed.getValue(it) } + (totalRoom - set.sumOf { room.getValue(it) }) >= deficit
+
+        if (optional.size <= 14) {
+            var best: Set<Int>? = null
+            var bestKey = Pair(Int.MAX_VALUE, Int.MAX_VALUE)
+            for (mask in 1 until (1 shl optional.size)) {
+                val set = optional.filterIndexed { bit, _ -> mask and (1 shl bit) != 0 }.toSet()
+                val key = Pair(set.size, set.sumOf { freed.getValue(it) })
+                if ((key.first < bestKey.first || (key.first == bestKey.first && key.second < bestKey.second)) && covers(set)) {
+                    best = set
+                    bestKey = key
+                }
+            }
+            return best ?: optional.toSet()
+        }
+        // Bardzo wiele zadań opcjonalnych – zachłannie od najdłuższych.
+        val chosen = mutableSetOf<Int>()
+        for (idx in optional.sortedByDescending { freed.getValue(it) }) {
+            if (covers(chosen)) break
+            chosen += idx
+        }
+        return chosen
     }
 
     private fun proposal(

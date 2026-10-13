@@ -39,7 +39,6 @@ import pl.rytm.app.domain.model.ScheduleMode
 import pl.rytm.app.domain.session.ClockReading
 import pl.rytm.app.domain.session.LiveSession
 import pl.rytm.app.domain.session.MusicOutput
-import pl.rytm.app.domain.session.MusicState
 import pl.rytm.app.domain.session.Phase
 import pl.rytm.app.domain.session.RunnerConfig
 import pl.rytm.app.domain.session.SessionClock
@@ -54,6 +53,8 @@ import pl.rytm.app.music.ExternalSoundCloudOutput
 import pl.rytm.app.music.SoundCloudWidgetPlayer
 import pl.rytm.app.speech.AndroidSpeech
 import pl.rytm.app.speech.SpeechConfig
+import pl.rytm.app.speech.ClipSpeechOutput
+import pl.rytm.app.domain.speech.SpeechCatalog
 import java.util.UUID
 import java.util.concurrent.Executors
 
@@ -81,6 +82,7 @@ class RoutineSessionService : Service(), SessionController {
 
     private var runner: SessionRunner? = null
     private var speech: AndroidSpeech? = null
+    private var clips: ClipSpeechOutput? = null
     private var player: SoundCloudWidgetPlayer? = null
     private var music: MusicOutput? = null
     private var systemDucker: SystemDucker? = null
@@ -225,7 +227,9 @@ class RoutineSessionService : Service(), SessionController {
         sessionStartedElapsed = SystemClock.elapsedRealtime()
         acquireWakeLock(plan)
 
-        val useAlarmStream = settings.voiceStream == VoiceStream.ALARM || (fromAlarm && settings.alarmSessionsUseAlarmStream)
+        // Strumień budzika gra też z głośnika – przy podłączonych słuchawkach zawsze używamy multimediów.
+        val wantsAlarmStream = settings.voiceStream == VoiceStream.ALARM || (fromAlarm && settings.alarmSessionsUseAlarmStream)
+        val useAlarmStream = wantsAlarmStream && !AudioRoutes.headphonesConnected(this)
         val tts = AndroidSpeech(
             this,
             SpeechConfig(
@@ -237,13 +241,17 @@ class RoutineSessionService : Service(), SessionController {
             ),
         )
         speech = tts
+        // Komunikaty z gotowych nagrań – silnik mowy nie zajmuje dźwięku, więc nie może wstrzymać muzyki.
+        val clipSpeech = ClipSpeechOutput(this, tts)
+        clips = clipSpeech
 
         val output: MusicOutput? = when (plan.musicPlayback) {
             MusicPlayback.EMBEDDED -> {
+                // Bez własnego fokusu audio: muzyka ma się tylko przyciszać, nigdy nie zatrzymywać.
                 val p = SoundCloudWidgetPlayer(this)
                 player = p
                 SessionHub.setPlayer(p)
-                FocusAwareMusic(this, p)
+                p
             }
             MusicPlayback.EXTERNAL_APP -> {
                 if (settings.externalDucking == ExternalDucking.SYSTEM) {
@@ -264,7 +272,7 @@ class RoutineSessionService : Service(), SessionController {
         val r = SessionRunner(
             scope = engineScope,
             clock = AndroidSessionClock(this),
-            speech = tts,
+            speech = clipSpeech,
             music = output,
             persistence = container.sessionStore,
             effects = effects,
@@ -278,17 +286,27 @@ class RoutineSessionService : Service(), SessionController {
         setupMediaSession(plan)
         callMonitor = CallMonitor(this) { inCall -> runner?.onCallStateChanged(inCall) }.also { it.start() }
         r.start(snapshot, announceCurrent = announceCurrent, notice = notice)
+        clipSpeech.prerender(SpeechCatalog.prioritized(plan), ioScope)
     }
 
     // ------------------------------------------------------------------ efekty sesji
 
     private val effects = object : SessionEffects {
+        @Volatile
+        private var wasPaused = false
+
         override fun onLiveUpdate(live: LiveSession) {
             SessionHub.publish(live)
+            val paused = live.status.paused
+            // Wznowienie (np. po długiej pauzie) – przedłuż blokadę uśpienia.
+            if (wasPaused && !paused) main.post { refreshWakeLock(live.plan, paused = false) }
+            wasPaused = paused
             main.post { updateNotification(live) }
         }
 
         override fun onTaskChanged(live: LiveSession) {
+            // Przedłuż blokadę uśpienia (np. po długiej pauzie) – sesja ma działać przy wygaszonym ekranie.
+            main.post { refreshWakeLock(live.plan, live.status.paused) }
             if (settings.vibrateOnTaskChange && !live.status.paused &&
                 (live.status.phase == Phase.ACTIVE || live.status.phase == Phase.AWAITING_CONFIRMATION)
             ) {
@@ -446,6 +464,8 @@ class RoutineSessionService : Service(), SessionController {
         player = null
         systemDucker?.release()
         systemDucker = null
+        clips?.release()
+        clips = null
         speech?.shutdown()
         speech = null
         runner = null
@@ -466,6 +486,7 @@ class RoutineSessionService : Service(), SessionController {
             runner?.currentSnapshot?.let { container.sessionStore.save(it, sync = true) }
             callMonitor?.stop()
             music?.stop()
+            clips?.release()
             speech?.shutdown()
             mediaSession?.release()
             releaseWakeLock()
@@ -484,12 +505,20 @@ class RoutineSessionService : Service(), SessionController {
     private fun acquireWakeLock(plan: SessionPlan) {
         releaseWakeLock()
         val pm = getSystemService(PowerManager::class.java) ?: return
-        val timeout = plan.plannedTotalMs + plan.entries.size * plan.effectiveTimeoutMs + 2 * 60 * 60_000L
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Rytm:session").apply {
             setReferenceCounted(false)
-            acquire(timeout)
+            acquire(wakeLockTimeout(plan))
         }
     }
+
+    private fun refreshWakeLock(plan: SessionPlan, paused: Boolean) {
+        if (paused) return
+        val lock = wakeLock
+        if (lock == null || !lock.isHeld) acquireWakeLock(plan) else lock.acquire(wakeLockTimeout(plan))
+    }
+
+    private fun wakeLockTimeout(plan: SessionPlan) =
+        plan.plannedTotalMs + plan.entries.size * plan.effectiveTimeoutMs + 2 * 60 * 60_000L
 
     private fun releaseWakeLock() {
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -526,42 +555,5 @@ class RoutineSessionService : Service(), SessionController {
                 Intent(context, RoutineSessionService::class.java).setAction(ACTION_RECOVER),
             )
         }
-    }
-}
-
-/** Muzyka z fokusem audio: pauza, gdy inna aplikacja przejmie dźwięk; wznowienie, gdy go odda. */
-private class FocusAwareMusic(context: Context, private val player: SoundCloudWidgetPlayer) : MusicOutput {
-    @Volatile private var sessionWantsPlay = false
-    private val focus = MusicFocus(
-        context,
-        onPause = { player.interrupt() },
-        onResume = { if (sessionWantsPlay) player.play() },
-    )
-
-    override val state: kotlinx.coroutines.flow.StateFlow<MusicState> get() = player.state
-
-    override fun prepare(plan: SessionPlan, autoPlay: Boolean) {
-        sessionWantsPlay = autoPlay
-        if (autoPlay) focus.requestForPlayback()
-        player.prepare(plan, autoPlay)
-    }
-
-    override fun play() {
-        sessionWantsPlay = true
-        focus.requestForPlayback()
-        player.play()
-    }
-
-    override fun pause() {
-        sessionWantsPlay = false
-        player.pause()
-    }
-
-    override fun setVolume(volume: Float) = player.setVolume(volume)
-
-    override fun stop() {
-        sessionWantsPlay = false
-        focus.abandon()
-        player.stop()
     }
 }

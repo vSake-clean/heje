@@ -7,7 +7,6 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import java.util.concurrent.Executor
 
 /**
@@ -62,71 +61,20 @@ class CallMonitor(context: Context, private val onChange: (inCall: Boolean) -> U
     }
 }
 
-/**
- * Fokus audio dla muzyki w odtwarzaczu wbudowanym. Reaguje na przejęcie dźwięku przez inne
- * aplikacje (pauza / wznowienie muzyki). Harmonogram i komunikaty działają niezależnie.
- *
- * Uwaga: WebView na części urządzeń sam prosi o fokus audio przy starcie odtwarzania – utrata
- * fokusu tuż po naszym „play” jest wtedy ignorowana, żeby muzyka nie zatrzymała się sama.
- */
-class MusicFocus(
-    context: Context,
-    private val onPause: () -> Unit,
-    private val onResume: () -> Unit,
-) {
-    private val audio = context.getSystemService(AudioManager::class.java)
-    private var request: AudioFocusRequest? = null
-    private var lastPlayRequestAt = 0L
-    private var pausedByFocus = false
-    private var webViewOwnsFocus = false
-
-    private val listener = AudioManager.OnAudioFocusChangeListener { change ->
-        when (change) {
-            AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                if (SystemClock.elapsedRealtime() - lastPlayRequestAt < SELF_LOSS_WINDOW_MS) {
-                    // Najpewniej to WebView przejął fokus na potrzeby tego samego odtwarzania.
-                    webViewOwnsFocus = true
-                    abandon()
-                } else {
-                    pausedByFocus = true
-                    onPause()
-                }
-            }
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                if (pausedByFocus) {
-                    pausedByFocus = false
-                    onResume()
-                }
-            }
-            // LOSS_TRANSIENT_CAN_DUCK: Android (8+) sam przycisza naszą muzykę.
+/** Informacje o wyjściu audio. */
+object AudioRoutes {
+    /** Czy podłączone są słuchawki (przewodowe, USB lub Bluetooth). */
+    fun headphonesConnected(context: Context): Boolean {
+        val audio = context.getSystemService(AudioManager::class.java) ?: return false
+        val types = buildSet {
+            add(android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES)
+            add(android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET)
+            add(android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)
+            add(android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO)
+            add(android.media.AudioDeviceInfo.TYPE_USB_HEADSET)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(android.media.AudioDeviceInfo.TYPE_BLE_HEADSET)
         }
-    }
-
-    fun requestForPlayback(): Boolean {
-        lastPlayRequestAt = SystemClock.elapsedRealtime()
-        if (webViewOwnsFocus) return true
-        val req = request ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build(),
-            )
-            .setWillPauseWhenDucked(false)
-            .setAcceptsDelayedFocusGain(false)
-            .setOnAudioFocusChangeListener(listener, Handler(Looper.getMainLooper()))
-            .build()
-            .also { request = it }
-        return audio.requestAudioFocus(req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-    }
-
-    fun abandon() {
-        request?.let { audio.abandonAudioFocusRequest(it) }
-        request = null
-    }
-
-    private companion object {
-        const val SELF_LOSS_WINDOW_MS = 3_000L
+        return runCatching { audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in types } }.getOrDefault(false)
     }
 }
 

@@ -78,16 +78,21 @@ fun SoundCloudPickerScreen(onBack: () -> Unit, onPicked: (MusicSelection) -> Uni
     var error by remember { mutableStateOf<String?>(null) }
     var pasted by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<MusicSelection?>(null) }
+    var previewWarning by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val resolver = remember { SoundCloudResolver() }
 
     val detected = SoundCloudLinks.parse(currentUrl) as? SoundCloudLinks.Parsed.Supported
 
-    fun resolve(input: String) {
+    fun resolve(input: String, pageTitle: String? = null) {
         scope.launch {
             resolving = true
             when (val r = resolver.resolve(input)) {
-                is SoundCloudResolver.Result.Ok -> preview = r.selection
+                is SoundCloudResolver.Result.Ok -> {
+                    previewWarning = r.warning
+                    // Prywatna treść bez metadanych z oEmbed – użyj tytułu z otwartej strony.
+                    preview = if (r.warning != null && !pageTitle.isNullOrBlank()) r.selection.copy(title = pageTitle) else r.selection
+                }
                 is SoundCloudResolver.Result.Error -> error = r.message
             }
             resolving = false
@@ -123,7 +128,20 @@ fun SoundCloudPickerScreen(onBack: () -> Unit, onPicked: (MusicSelection) -> Uni
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),
                         )
-                        Button(enabled = detected != null && !resolving, onClick = { resolve(currentUrl) }) { Text("Wybierz") }
+                        Button(enabled = detected != null && !resolving, onClick = {
+                            val view = webView
+                            if (view == null) {
+                                resolve(currentUrl)
+                            } else {
+                                // Własna prywatna playlista: weź link z kodem dostępu (s-…) z danych strony.
+                                view.evaluateJavascript(SoundCloudLinks.SECRET_LINK_JS) { result ->
+                                    val json = runCatching { org.json.JSONTokener(result).nextValue() as? String }.getOrNull()
+                                    val found = json?.takeIf { it.isNotBlank() }?.let { runCatching { org.json.JSONObject(it) }.getOrNull() }
+                                    val secretUrl = found?.optString("u")?.takeIf { it.isNotBlank() }
+                                    resolve(secretUrl ?: currentUrl, found?.optString("t"))
+                                }
+                            }
+                        }) { Text("Wybierz") }
                     }
                 }
             }
@@ -198,7 +216,8 @@ fun SoundCloudPickerScreen(onBack: () -> Unit, onPicked: (MusicSelection) -> Uni
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         "W aplikacji SoundCloud otwórz utwór lub playlistę → „Udostępnij” → „Kopiuj link” i wklej go tutaj. " +
-                            "Możesz też wybrać „Udostępnij” → „Rytm”.",
+                            "Możesz też wybrać „Udostępnij” → „Rytm”. Prywatne playlisty: użyj linku z kodem „s-…” " +
+                            "(tak wygląda link prywatny) albo kodu „Osadź” (embed).",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     OutlinedTextField(
@@ -225,6 +244,10 @@ fun SoundCloudPickerScreen(onBack: () -> Unit, onPicked: (MusicSelection) -> Uni
                     Text(sel.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     if (sel.artist.isNotBlank()) Text(sel.artist)
                     Spacer(Modifier.width(4.dp))
+                    previewWarning?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
+                    if (SoundCloudLinks.isSecret(sel.url) || sel.embedUrl?.contains("secret_token") == true) {
+                        Text("Prywatna treść – link z kodem dostępu zostanie zapamiętany.", style = MaterialTheme.typography.bodySmall)
+                    }
                     Text(
                         "Muzyka odtworzy się w oficjalnym odtwarzaczu SoundCloud. Niektóre utwory (np. tylko dla SoundCloud Go+ " +
                             "lub z wyłączonym osadzaniem) mogą grać jako 30-sekundowy fragment albo wcale.",

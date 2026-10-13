@@ -1,0 +1,284 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "59fd5f5653da91360c057402d497565b",
+    "entities": [
+      {
+        "tableName": "routines",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `goal` TEXT NOT NULL, `mode` TEXT NOT NULL, `flexible_timeout_sec` INTEGER NOT NULL, `interruption_behavior` TEXT NOT NULL, `target_duration_sec` INTEGER, `wake_time_minutes` INTEGER, `leave_time_minutes` INTEGER, `alarm_enabled` INTEGER NOT NULL, `alarm_days` INTEGER NOT NULL, `music_url` TEXT, `music_title` TEXT, `music_artist` TEXT, `music_artwork_url` TEXT, `music_kind` TEXT, `music_embed_url` TEXT, `music_playback` TEXT NOT NULL, `music_volume` INTEGER NOT NULL, `music_loop` INTEGER NOT NULL, `voice_enabled` INTEGER NOT NULL, `voice_volume` INTEGER NOT NULL, `voice_include_duration` INTEGER NOT NULL, `voice_warning_sec` INTEGER NOT NULL, `voice_start_message` TEXT NOT NULL, `voice_end_message` TEXT NOT NULL, `last_used_at` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goal",
+            "columnName": "goal",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mode",
+            "columnName": "mode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "flexibleTimeoutSec",
+            "columnName": "flexible_timeout_sec",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "interruptionBehavior",
+            "columnName": "interruption_behavior",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetDurationSec",
+            "columnName": "target_duration_sec",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "wakeTimeMinutes",
+            "columnName": "wake_time_minutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "leaveTimeMinutes",
+            "columnName": "leave_time_minutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "alarmEnabled",
+            "columnName": "alarm_enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "alarmDays",
+            "columnName": "alarm_days",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "musicUrl",
+            "columnName": "music_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "musicTitle",
+            "columnName": "music_title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "musicArtist",
+            "columnName": "music_artist",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "musicArtworkUrl",
+            "columnName": "music_artwork_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "musicKind",
+            "columnName": "music_kind",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "musicEmbedUrl",
+            "columnName": "music_embed_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "musicPlayback",
+            "columnName": "music_playback",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "musicVolume",
+            "columnName": "music_volume",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "musicLoop",
+            "columnName": "music_loop",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "voiceEnabled",
+            "columnName": "voice_enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "voiceVolume",
+            "columnName": "voice_volume",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "voiceIncludeDuration",
+            "columnName": "voice_include_duration",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "voiceWarningSec",
+            "columnName": "voice_warning_sec",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "voiceStartMessage",
+            "columnName": "voice_start_message",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "voiceEndMessage",
+            "columnName": "voice_end_message",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUsedAt",
+            "columnName": "last_used_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "tasks",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `routine_id` INTEGER NOT NULL, `position` INTEGER NOT NULL, `title` TEXT NOT NULL, `spoken_text` TEXT NOT NULL, `duration_sec` INTEGER NOT NULL, `gap_before_sec` INTEGER NOT NULL, `mandatory` INTEGER NOT NULL, `min_duration_sec` INTEGER, `notes` TEXT NOT NULL, FOREIGN KEY(`routine_id`) REFERENCES `routines`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "routineId",
+            "columnName": "routine_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "spokenText",
+            "columnName": "spoken_text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationSec",
+            "columnName": "duration_sec",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gapBeforeSec",
+            "columnName": "gap_before_sec",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mandatory",
+            "columnName": "mandatory",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minDurationSec",
+            "columnName": "min_duration_sec",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_tasks_routine_id",
+            "unique": false,
+            "columnNames": [
+              "routine_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_tasks_routine_id` ON `${TABLE_NAME}` (`routine_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "routines",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "routine_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '59fd5f5653da91360c057402d497565b')"
+    ]
+  }
+}

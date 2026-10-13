@@ -13,7 +13,9 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.view.View
 import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
@@ -41,7 +43,11 @@ import java.util.Locale
  * - Nie wymaga klucza API ani logowania; odtwarza to, co SoundCloud pozwala osadzać.
  * - Głośność jest ustawiana metodą widżetu `setVolume(0..100)` – to głośność samego odtwarzacza,
  *   więc przyciszanie podczas komunikatów nie zmienia głośności systemowej.
- * - Odtwarzacz jest pokazywany na ekranie sesji (z logo i linkiem SoundCloud).
+ * - Odtwarzacz jest pokazywany na ekranie sesji (z logo i linkiem SoundCloud), a poza nim
+ *   „parkowany” w niewidocznym miejscu aktywności – strona pozostaje dla WebView widoczna,
+ *   więc muzyka gra dalej przy wygaszonym ekranie i w słuchawkach.
+ * - Muzyka nigdy nie jest celowo zatrzymywana na czas komunikatów – tylko przyciszana.
+ *   [PlaybackGuard] wznawia ją, gdyby system/słuchawki/inna aplikacja ją wstrzymały.
  * - Po utracie internetu odtwarzacz czeka na sieć i wznawia od zapamiętanego miejsca.
  *   Harmonogram działa niezależnie od muzyki.
  *
@@ -57,6 +63,8 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
 
     private var webView: WebView? = null
     private var pendingContainer: java.lang.ref.WeakReference<ViewGroup>? = null
+    private var parking: java.lang.ref.WeakReference<ViewGroup>? = null
+    private val guard = PlaybackGuard()
     private val _state = MutableStateFlow(MusicState(playback = MusicPlayback.EMBEDDED, volumeControllable = true))
     override val state: StateFlow<MusicState> = _state.asStateFlow()
 
@@ -76,9 +84,6 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
     private val html: String by lazy {
         appContext.assets.open(ASSET).bufferedReader().use { it.readText() }
     }
-
-    /** Wywoływane przez usługę: kto trzyma fokus audio, może wstrzymać muzykę na czas rozmowy. */
-    var onUserVisiblePlayChange: ((Boolean) -> Unit)? = null
 
     // ------------------------------------------------------------------ MusicOutput
 
@@ -105,6 +110,9 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
             ensureWebView()
             registerNetworkCallback()
             loadPage()
+            guard.reset()
+            main.removeCallbacks(probeLoop)
+            main.postDelayed(probeLoop, PROBE_INTERVAL_MS)
         }
     }
 
@@ -136,23 +144,13 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
 
     override fun stop() {
         main.post {
+            main.removeCallbacks(probeLoop)
             released = true
             wantPlaying = false
             if (widgetReady) js("rytm.pause()")
             unregisterNetworkCallback()
             destroyWebView()
             _state.update { it.copy(status = MusicStatus.NONE) }
-        }
-    }
-
-    /** Inna aplikacja przejęła dźwięk – wstrzymaj muzykę (harmonogram trwa dalej). */
-    fun interrupt() {
-        main.post {
-            wantPlaying = false
-            if (widgetReady) js("rytm.pause()")
-            _state.update {
-                it.copy(status = MusicStatus.INTERRUPTED, message = "Inna aplikacja odtwarza dźwięk – muzyka wróci, gdy skończy.")
-            }
         }
     }
 
@@ -170,16 +168,44 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
             return
         }
         pendingContainer = null
+        if (view.parent === container) return
         contextWrapper.baseContext = container.context
         (view.parent as? ViewGroup)?.removeView(view)
         container.addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
+    /** Ekran sesji zniknął – odtwarzacz wraca na „parking”, żeby WebView wciąż był w oknie aktywności. */
     fun detachFrom(container: ViewGroup) {
         if (pendingContainer?.get() === container) pendingContainer = null
         val view = webView ?: return
-        if (view.parent === container) container.removeView(view)
-        contextWrapper.baseContext = appContext
+        if (view.parent !== container) return
+        container.removeView(view)
+        val park = parking?.get()
+        if (park != null && park !== container) attachTo(park) else contextWrapper.baseContext = appContext
+    }
+
+    /**
+     * Niewidoczne miejsce w oknie aktywności (1×1 px). Dopóki WebView jest w oknie, Chromium traktuje
+     * odtwarzacz jak aktywną kartę – bez wstrzymywania i dławienia przy wygaszonym ekranie.
+     */
+    fun park(holder: ViewGroup) {
+        parking = java.lang.ref.WeakReference(holder)
+        val view = webView
+        if (view == null) {
+            if (pendingContainer?.get() == null) pendingContainer = java.lang.ref.WeakReference(holder)
+            return
+        }
+        if (view.parent == null) attachTo(holder)
+    }
+
+    fun unpark(holder: ViewGroup) {
+        if (parking?.get() === holder) parking = null
+        if (pendingContainer?.get() === holder) pendingContainer = null
+        val view = webView ?: return
+        if (view.parent === holder) {
+            holder.removeView(view)
+            contextWrapper.baseContext = appContext
+        }
     }
 
     val hasView: Boolean get() = webView != null
@@ -188,7 +214,7 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
 
     private fun ensureWebView() {
         if (webView != null) return
-        val view = WebView(contextWrapper)
+        val view = KeepAliveWebView(contextWrapper)
         view.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -200,6 +226,8 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
         // Proces renderujący ma pozostać ważny także przy wygaszonym ekranie – inaczej system mógłby go ubić.
         view.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
         view.setBackgroundColor(Color.TRANSPARENT)
+        // Zalogowany w Rytmie użytkownik SoundCloud: odtwarzacz może użyć sesji (np. własne prywatne playlisty).
+        runCatching { CookieManager.getInstance().setAcceptThirdPartyCookies(view, true) }
         view.addJavascriptInterface(Bridge(), "RytmBridge")
         view.webChromeClient = WebChromeClient()
         view.webViewClient = object : WebViewClient() {
@@ -228,7 +256,9 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
             }
         }
         webView = view
-        pendingContainer?.get()?.let { attachTo(it) }
+        view.onResume()
+        view.resumeTimers()
+        (pendingContainer?.get() ?: parking?.get())?.let { attachTo(it) }
     }
 
     private fun destroyWebView() {
@@ -258,7 +288,8 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
 
     private fun onPageLoaded() {
         val music = plan?.music ?: return
-        val url = SoundCloudLinks.widgetUrl(music.url, autoPlay = wantPlaying, startTrack = currentIndex)
+        // Adres osadzenia z oEmbed (zawiera kod dostępu prywatnych playlist) albo zwykły link.
+        val url = SoundCloudLinks.widgetUrl(music.embedUrl ?: music.url, autoPlay = wantPlaying, startTrack = currentIndex)
         js(
             "rytm.load(${jsString(url)}, $wantPlaying, ${formatVolume(volume)}, ${plan?.musicLoop ?: true})",
         )
@@ -291,6 +322,37 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
             val s = _state.value.status
             if (!released && (s == MusicStatus.ERROR || s == MusicStatus.WAITING_FOR_NETWORK)) reload()
         }, delay)
+    }
+
+    // ------------------------------------------------------------------ strażnik odtwarzania
+
+    private val probeLoop = object : Runnable {
+        override fun run() {
+            if (released) return
+            if (wantPlaying && networkAvailable) {
+                if (widgetReady) js("rytm.probe()") else handleProbe(ready = false, paused = true, position = 0)
+            } else {
+                guard.reset()
+            }
+            main.postDelayed(this, PROBE_INTERVAL_MS)
+        }
+    }
+
+    private fun handleProbe(ready: Boolean, paused: Boolean, position: Long) {
+        if (released) return
+        val busy = _state.value.status == MusicStatus.ERROR || _state.value.status == MusicStatus.WAITING_FOR_NETWORK
+        if (busy) return // tym zajmuje się ponawianie po błędzie / po odzyskaniu sieci
+        when (guard.onProbe(SystemClock.elapsedRealtime(), wantPlaying, networkAvailable, ready, paused, position)) {
+            PlaybackGuard.Action.NONE -> Unit
+            PlaybackGuard.Action.PLAY -> {
+                Log.i(TAG, "Muzyka niespodziewanie stoi – wznawiam")
+                js("rytm.play()")
+            }
+            PlaybackGuard.Action.RELOAD -> {
+                Log.w(TAG, "Odtwarzacz nie reaguje – przeładowuję od ${lastPositionMs} ms")
+                reload()
+            }
+        }
     }
 
     // ------------------------------------------------------------------ sieć
@@ -357,7 +419,10 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
     )
 
     @Serializable
-    private data class Progress(val position: Long = 0, val relative: Double = 0.0)
+    private data class Progress(val position: Double = 0.0, val relative: Double = 0.0)
+
+    @Serializable
+    private data class Probe(val ready: Boolean = false, val paused: Boolean = true, val position: Long = 0)
 
     private inner class Bridge {
         @JavascriptInterface
@@ -398,7 +463,6 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
                 return@post
             }
             _state.update { it.copy(status = MusicStatus.PLAYING, message = null) }
-            onUserVisiblePlayChange?.invoke(true)
         }
 
         @JavascriptInterface
@@ -406,7 +470,8 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
             val current = _state.value.status
             if (current == MusicStatus.WAITING_FOR_NETWORK || current == MusicStatus.INTERRUPTED) return@post
             _state.update { it.copy(status = MusicStatus.PAUSED) }
-            onUserVisiblePlayChange?.invoke(false)
+            // Pauza, o którą sesja nie prosiła (system, słuchawki, inna aplikacja) – sprawdź i wznów.
+            if (wantPlaying) main.postDelayed({ if (wantPlaying && widgetReady && !released) js("rytm.probe()") }, 1_000)
         }
 
         @JavascriptInterface
@@ -434,13 +499,14 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
         @JavascriptInterface
         fun onProgress(data: String) = main.post {
             val p = runCatching { json.decodeFromString(Progress.serializer(), data) }.getOrNull() ?: return@post
-            lastPositionMs = p.position
+            val position = p.position.toLong()
+            lastPositionMs = position
             lastProgressAt = SystemClock.elapsedRealtime()
             _state.update {
                 if (it.status == MusicStatus.WAITING_FOR_NETWORK || it.status == MusicStatus.LOADING) {
-                    it.copy(positionMs = p.position, status = MusicStatus.PLAYING, message = null)
+                    it.copy(positionMs = position, status = MusicStatus.PLAYING, message = null)
                 } else {
-                    it.copy(positionMs = p.position)
+                    it.copy(positionMs = position)
                 }
             }
         }
@@ -461,6 +527,19 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
         }
 
         @JavascriptInterface
+        fun onProbe(data: String) = main.post {
+            val p = runCatching { json.decodeFromString(Probe.serializer(), data) }.getOrNull() ?: return@post
+            if (p.ready && !p.paused) {
+                lastPositionMs = p.position
+                lastProgressAt = SystemClock.elapsedRealtime()
+                if (_state.value.status != MusicStatus.PLAYING && wantPlaying) {
+                    _state.update { it.copy(status = MusicStatus.PLAYING, message = null) }
+                }
+            }
+            handleProbe(p.ready, p.paused, p.position)
+        }
+
+        @JavascriptInterface
         fun onVolume(@Suppress("UNUSED_PARAMETER") data: String) = Unit
     }
 
@@ -471,6 +550,7 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
         /** Adres bazowy strony odtwarzacza – zarezerwowana domena dla treści aplikacji (nie podszywamy się pod SoundCloud). */
         const val BASE_URL = "https://appassets.androidplatform.net/player/"
         private val RETRY_DELAYS_MS = longArrayOf(3_000, 10_000, 30_000, 60_000)
+        private const val PROBE_INTERVAL_MS = 3_000L
 
         fun formatVolume(v: Float): String = String.format(Locale.ROOT, "%.1f", v.coerceIn(0f, 100f))
 
@@ -488,6 +568,17 @@ class SoundCloudWidgetPlayer(context: Context) : MusicOutput {
             }
             append('"')
         }
+    }
+}
+
+/**
+ * WebView odtwarzacza muzyki. Gdy okno aktywności staje się niewidoczne (wygaszony ekran,
+ * aplikacja w tle), WebView dalej zgłasza się jako widoczny – inaczej Chromium traktowałby stronę
+ * jak kartę w tle (wstrzymywanie/dławienie), a muzyka mogłaby ucichnąć w słuchawkach.
+ */
+class KeepAliveWebView(context: Context) : WebView(context) {
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(View.VISIBLE)
     }
 }
 

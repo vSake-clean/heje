@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -24,6 +25,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import pl.rytm.app.container
@@ -63,6 +66,36 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+        parkMusicPlayer()
+    }
+
+    /**
+     * Niewidoczne miejsce (1×1 px) w oknie aktywności na odtwarzacz SoundCloud. Dopóki WebView jest
+     * w oknie, przeglądarka nie usypia strony – muzyka gra przy wygaszonym ekranie i w słuchawkach,
+     * także gdy ekran sesji nie jest otwarty.
+     */
+    private fun parkMusicPlayer() {
+        val holder = android.widget.FrameLayout(this).apply {
+            alpha = 0f
+            importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        }
+        addContentView(holder, android.view.ViewGroup.LayoutParams(1, 1))
+        musicHolder = holder
+        lifecycleScope.launch {
+            var parkedIn: pl.rytm.app.music.SoundCloudWidgetPlayer? = null
+            SessionHub.player.collect { player ->
+                if (parkedIn != null && parkedIn !== player) parkedIn?.unpark(holder)
+                player?.park(holder)
+                parkedIn = player
+            }
+        }
+    }
+
+    private var musicHolder: android.widget.FrameLayout? = null
+
+    override fun onDestroy() {
+        musicHolder?.let { h -> SessionHub.player.value?.unpark(h) }
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -91,9 +124,10 @@ class MainActivity : ComponentActivity() {
     /** Podczas sesji: ekran nad blokadą (opcjonalnie), włączenie ekranu przy starcie z budzika, brak wygaszania. */
     private fun observeSessionWindowFlags() {
         lifecycleScope.launch {
-            combine(SessionHub.live, SessionHub.fromAlarm, container.settings.settings) { live, alarm, s ->
-                Triple(live != null, alarm, s)
-            }.collect { (active, alarm, s) ->
+            // Stan sesji odświeża się 4× na sekundę – reagujemy tylko na faktyczne zmiany.
+            combine(SessionHub.live.map { it != null }.distinctUntilChanged(), SessionHub.fromAlarm, container.settings.settings) { active, alarm, s ->
+                Triple(active, alarm, s)
+            }.distinctUntilChanged().collect { (active, alarm, s) ->
                 val overLock = active && (s.showOverLockScreen || alarm)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                     setShowWhenLocked(overLock)
@@ -130,7 +164,9 @@ private fun AppNavigation(
     val nav = rememberNavController()
     val settingsVm: SettingsViewModel = viewModel()
     val settings by settingsVm.settings.collectAsStateWithLifecycle()
-    val live by SessionHub.live.collectAsStateWithLifecycle()
+    // Tylko „czy trwa sesja” – bez przerysowywania całej nawigacji przy każdym odświeżeniu stanu sesji.
+    val sessionFlow = remember { SessionHub.live.map { it != null }.distinctUntilChanged() }
+    val sessionActive by sessionFlow.collectAsStateWithLifecycle(initialValue = false)
 
     val s = settings
     if (s == null) {
@@ -139,8 +175,8 @@ private fun AppNavigation(
     }
     val start = if (s.onboardingDone) "home" else "onboarding"
 
-    LaunchedEffect(openSession, live != null) {
-        if (openSession && live != null) {
+    LaunchedEffect(openSession, sessionActive) {
+        if (openSession && sessionActive) {
             nav.navigate("session") { launchSingleTop = true }
             onOpenSessionConsumed()
         }
@@ -156,6 +192,9 @@ private fun AppNavigation(
         }
         composable("home") {
             val vm: HomeViewModel = viewModel()
+            val activity = androidx.activity.compose.LocalActivity.current
+            // Trwa rutyna: „Wstecz” chowa aplikację zamiast ją zamykać – odtwarzacz zostaje w oknie (muzyka gra dalej).
+            androidx.activity.compose.BackHandler(enabled = sessionActive) { activity?.moveTaskToBack(true) }
             LaunchedEffect(pendingShare) {
                 if (pendingShare != null) {
                     vm.handleSharedText(pendingShare)
