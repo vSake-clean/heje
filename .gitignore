@@ -1,0 +1,7 @@
+build/*.bin
+build/*.map
+build/*.lbl
+src/*.o
+tools/test/gs/
+tools/test/harness
+tools/test/pcego_patched.c
