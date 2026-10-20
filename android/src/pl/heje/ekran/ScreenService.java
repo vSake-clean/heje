@@ -288,6 +288,18 @@ public class ScreenService extends Service {
             String path = parts.length > 1 ? parts[1] : "/";
             OutputStream out = new BufferedOutputStream(s.getOutputStream(), 64 * 1024);
 
+            if (path.startsWith("/info")) {
+                // Odpowiedź identyfikująca – program na PC szuka tak telefonu w swojej podsieci.
+                byte[] info = (MAGIC + " " + PORT + " " + Build.MANUFACTURER + " " + Build.MODEL)
+                        .getBytes("UTF-8");
+                out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\n"
+                        + "Content-Length: " + info.length + "\r\nConnection: close\r\n\r\n")
+                        .getBytes(LATIN1));
+                out.write(info);
+                out.flush();
+                return;
+            }
+
             if (!path.startsWith("/stream")) {
                 byte[] html = ("<!doctype html><html><head><meta charset=utf-8>"
                         + "<meta name=viewport content='width=device-width'>"
@@ -391,21 +403,34 @@ public class ScreenService extends Service {
         return list;
     }
 
-    /** Adresy IPv4 telefonu w sieci lokalnej (do wyświetlenia użytkownikowi). */
+    /**
+     * Adresy IPv4 telefonu w sieci lokalnej (do wyświetlenia użytkownikowi).
+     * Pomija interfejsy sieci komórkowej, a Wi-Fi/hotspot/USB stawia na początku.
+     */
     static List<String> localAddresses() {
-        List<String> list = new ArrayList<>();
+        List<String> preferred = new ArrayList<>();
+        List<String> other = new ArrayList<>();
         try {
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 if (!ni.isUp() || ni.isLoopback()) continue;
+                String name = ni.getName().toLowerCase();
+                if (name.startsWith("rmnet") || name.startsWith("ccmni") || name.startsWith("v4-")
+                        || name.startsWith("clat") || name.startsWith("dummy") || name.startsWith("r_rmnet")) {
+                    continue;
+                }
+                boolean local = name.startsWith("wlan") || name.startsWith("ap") || name.startsWith("swlan")
+                        || name.startsWith("softap") || name.startsWith("rndis") || name.startsWith("eth")
+                        || name.startsWith("ncm") || name.startsWith("bt-pan");
                 for (InetAddress a : Collections.list(ni.getInetAddresses())) {
                     if (a instanceof Inet4Address && a.isSiteLocalAddress()) {
-                        list.add(a.getHostAddress());
+                        (local ? preferred : other).add(a.getHostAddress());
                     }
                 }
             }
         } catch (Exception ignored) {
         }
-        return list;
+        preferred.addAll(other);
+        return preferred;
     }
 
     // ---------------------------------------------------------------- sprzątanie

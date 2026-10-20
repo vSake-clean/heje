@@ -118,7 +118,8 @@ public class MainActivity extends Activity {
         if (ScreenService.running) {
             StringBuilder sb = new StringBuilder();
             sb.append("Udostępnianie ekranu WŁĄCZONE.\n\n")
-              .append("Uruchom EkranTelefonu.exe na komputerze podłączonym do tej samej sieci Wi-Fi - ")
+              .append("Uruchom EkranTelefonu.exe na komputerze podłączonym do tej samej sieci Wi-Fi ")
+              .append("lub do hotspotu tego telefonu - ")
               .append("obraz pojawi się automatycznie.\n\n");
             List<String> ips = ScreenService.localAddresses();
             if (ips.isEmpty()) {
