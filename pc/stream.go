@@ -28,6 +28,9 @@ type viewer interface {
 	setStatus(s string)
 	// setFrame dostaje piksele w formacie BGRA (32 bity, wiersze od góry).
 	setFrame(bgra []byte, w, h int)
+	// setControlTarget podaje adres telefonu, do którego okno wysyła sterowanie
+	// (kliknięcia, przewijanie, klawiatura). Pusty string wyłącza sterowanie.
+	setControlTarget(addr string)
 }
 
 // discover szuka telefonu dwiema metodami naraz, aż któraś zadziała:
@@ -248,7 +251,9 @@ func run(manual string, v viewer) {
 			name = addr
 		}
 		v.setStatus("Łączenie z " + name + " (" + addr + ")...")
+		v.setControlTarget(addr)
 		err := stream(context.Background(), addr, &titled{viewer: v, name: name})
+		v.setControlTarget("")
 		v.setStatus("Rozłączono (" + err.Error() + "). Ponawiam...")
 		time.Sleep(2 * time.Second)
 	}

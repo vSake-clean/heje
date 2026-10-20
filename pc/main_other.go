@@ -16,6 +16,12 @@ type consoleViewer struct {
 
 func (c *consoleViewer) setStatus(s string) { fmt.Println(s) }
 
+func (c *consoleViewer) setControlTarget(addr string) {
+	if addr != "" {
+		fmt.Println("sterowanie dostępne:", addr)
+	}
+}
+
 func (c *consoleViewer) setFrame(_ []byte, w, h int) {
 	c.frames++
 	if time.Since(c.last) > time.Second {

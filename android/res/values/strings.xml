@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Ekran na PC</string>
+    <string name="control_label">Ekran na PC - sterowanie</string>
+    <string name="control_desc">Pozwala sterowac tym telefonem (dotyk, przewijanie, przyciski, pisanie) z komputera, na ktorym dziala EkranTelefonu.exe w tej samej sieci.</string>
 </resources>

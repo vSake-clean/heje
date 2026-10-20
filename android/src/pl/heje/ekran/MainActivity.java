@@ -24,6 +24,7 @@ public class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView status;
     private Button button;
+    private Button controlButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +66,25 @@ public class MainActivity extends Activity {
         });
         root.addView(button, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        controlButton = new Button(this);
+        controlButton.setTextSize(16);
+        controlButton.setText("Włącz sterowanie z komputera");
+        controlButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                } catch (Exception e) {
+                    status.setText("Otwórz Ustawienia → Ułatwienia dostępu i włącz "
+                            + "„Ekran na PC - sterowanie”.");
+                }
+            }
+        });
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        clp.topMargin = pad / 2;
+        root.addView(controlButton, clp);
 
         setContentView(root);
 
@@ -130,11 +150,24 @@ public class MainActivity extends Activity {
                 sb.append("\n(podgląd także w przeglądarce: http://")
                   .append(ips.get(0)).append(':').append(ScreenService.PORT).append(" )");
             }
+            if (ControlService.instance != null) {
+                sb.append("\n\nSterowanie z komputera: WŁĄCZONE.\n")
+                  .append("Klikaj i przewijaj myszką w oknie na komputerze.");
+            } else {
+                sb.append("\n\nSterowanie z komputera jest wyłączone - podgląd działa, ")
+                  .append("ale klikanie w oknie nic nie zrobi. Naciśnij przycisk poniżej, ")
+                  .append("aby je włączyć.");
+            }
             status.setText(sb.toString());
             button.setText("Zatrzymaj");
         } else {
-            status.setText("Naciśnij Start i zezwól na nagrywanie ekranu.");
+            status.setText("Naciśnij Start i zezwól na nagrywanie ekranu.\n\n"
+                    + "Aby sterować telefonem z komputera, włącz też „sterowanie” przyciskiem poniżej "
+                    + "(Ustawienia → Ułatwienia dostępu).");
             button.setText("Start");
         }
+        controlButton.setText(ControlService.instance != null
+                ? "Sterowanie z komputera: włączone ✓"
+                : "Włącz sterowanie z komputera");
     }
 }

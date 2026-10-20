@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -54,16 +55,32 @@ var (
 	pSetBkMode              = gdi32.NewProc("SetBkMode")
 	pCreateFontW            = gdi32.NewProc("CreateFontW")
 
+	pSetCapture     = user32.NewProc("SetCapture")
+	pReleaseCapture = user32.NewProc("ReleaseCapture")
+
 	pGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
 )
 
 const (
-	wmDestroy    = 0x0002
-	wmPaint      = 0x000F
-	wmEraseBkgnd = 0x0014
-	wmApp        = 0x8000
-	wmStatus     = wmApp + 1
-	wmResize     = wmApp + 2
+	wmDestroy     = 0x0002
+	wmPaint       = 0x000F
+	wmEraseBkgnd  = 0x0014
+	wmMouseMove   = 0x0200
+	wmLButtonDown = 0x0201
+	wmLButtonUp   = 0x0202
+	wmRButtonDown = 0x0204
+	wmMButtonDown = 0x0207
+	wmMouseWheel  = 0x020A
+	wmKeyDown     = 0x0100
+	wmChar        = 0x0102
+	wmApp         = 0x8000
+	wmStatus      = wmApp + 1
+	wmResize      = wmApp + 2
+
+	vkBack   = 0x08
+	vkEscape = 0x1B
+	vkF1     = 0x70
+	vkF2     = 0x71
 
 	wsOverlappedWindow = 0x00CF0000
 	cwUseDefault       = 0x80000000
@@ -155,6 +172,24 @@ type window struct {
 	status string
 	pix    []byte
 	w, h   int
+
+	// Prostokąt, w którym rzdjęcie ekranu telefonu jest aktualnie rysowane
+	// (piksele okna). Służy do przeliczania kliknięć na współrzędne telefonu.
+	imgDX, imgDY, imgDW, imgDH int
+
+	ctrlAddr string // adres telefonu dla poleceń sterujących ("" = brak)
+	warned   bool   // czy pokazano już podpowiedź o włączeniu sterowania
+
+	// Stan gestu myszy.
+	pressX, pressY float64   // początek przeciągnięcia (0..1)
+	pressTime      time.Time // moment wciśnięcia lewego przycisku
+	dragging       bool
+}
+
+func (v *window) setControlTarget(addr string) {
+	v.mu.Lock()
+	v.ctrlAddr = addr
+	v.mu.Unlock()
 }
 
 func (v *window) setStatus(s string) {
@@ -226,6 +261,9 @@ func (v *window) paint() {
 			dh, dw = ch, ch*w/h
 		}
 		dx, dy := (cw-dw)/2, (ch-dh)/2
+		v.mu.Lock()
+		v.imgDX, v.imgDY, v.imgDW, v.imgDH = dx, dy, dw, dh
+		v.mu.Unlock()
 		bi := bitmapInfo{header: bitmapInfoHeader{
 			biWidth: int32(w), biHeight: -int32(h), biPlanes: 1, biBitCount: 32,
 		}}
@@ -284,6 +322,39 @@ func main() {
 			return 0
 		case wmResize:
 			v.fitToFrame()
+			return 0
+		case wmLButtonDown:
+			v.onPress(mouseX(lParam), mouseY(lParam))
+			return 0
+		case wmMouseMove:
+			v.onMove(mouseX(lParam), mouseY(lParam))
+			return 0
+		case wmLButtonUp:
+			v.onRelease(mouseX(lParam), mouseY(lParam))
+			return 0
+		case wmRButtonDown:
+			v.sendKey("back")
+			return 0
+		case wmMButtonDown:
+			v.sendKey("home")
+			return 0
+		case wmMouseWheel:
+			v.onWheel(mouseX(lParam), mouseY(lParam), wheelDelta(wParam))
+			return 0
+		case wmKeyDown:
+			switch wParam {
+			case vkEscape:
+				v.sendKey("back")
+			case vkF1:
+				v.sendKey("home")
+			case vkF2:
+				v.sendKey("recents")
+			case vkBack:
+				v.sendControl("a=del")
+			}
+			return 0
+		case wmChar:
+			v.onChar(uint16(wParam))
 			return 0
 		case wmDestroy:
 			pPostQuitMessage.Call(0)

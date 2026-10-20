@@ -15,12 +15,15 @@ import android.media.Image;
 import android.media.ImageReader;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
+import android.view.Display;
 import android.view.WindowManager;
 
 import java.io.BufferedOutputStream;
@@ -76,7 +79,12 @@ public class ScreenService extends Service {
     private ServerSocket server;
     private DatagramSocket beacon;
 
+    private DisplayManager displayManager;
+    private PowerManager.WakeLock cpuLock;
+    private WifiManager.WifiLock wifiLock;
+
     private int width, height;
+    private int frameWidth;
     private Bitmap bitmap;
     private boolean dirty;
     private boolean encodeScheduled;
@@ -119,6 +127,7 @@ public class ScreenService extends Service {
         }
 
         running = true;
+        acquireLocks();
         startCapture();
         startServer();
         startBeacon();
@@ -154,26 +163,34 @@ public class ScreenService extends Service {
         }
     }
 
+    /**
+     * Nie pozwala systemowi uśpić procesora ani Wi-Fi, gdy użytkownik korzysta z innych
+     * aplikacji – bez tego część telefonów zwalnia lub zrywa strumień w tle.
+     */
+    private void acquireLocks() {
+        try {
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            cpuLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "EkranNaPC:cpu");
+            cpuLock.acquire();
+        } catch (Exception ignored) {
+        }
+        try {
+            WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "EkranNaPC:wifi");
+            wifiLock.acquire();
+        } catch (Exception ignored) {
+        }
+    }
+
     // ---------------------------------------------------------------- przechwytywanie
 
     private void startCapture() {
-        DisplayMetrics m = new DisplayMetrics();
-        ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getRealMetrics(m);
-        float scale = Math.min(1f, (float) MAX_SIDE / Math.max(m.widthPixels, m.heightPixels));
-        width = Math.round(m.widthPixels * scale) & ~1;
-        height = Math.round(m.heightPixels * scale) & ~1;
-
         captureThread = new HandlerThread("capture");
         captureThread.start();
         captureHandler = new Handler(captureThread.getLooper());
 
-        reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
-        reader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
-            @Override
-            public void onImageAvailable(ImageReader r) {
-                onImage(r);
-            }
-        }, captureHandler);
+        DisplayMetrics m = currentMetrics();
+        createReader(m);
 
         // Android 14 wymaga zarejestrowania callbacku przed utworzeniem wirtualnego ekranu.
         projection.registerCallback(new MediaProjection.Callback() {
@@ -186,20 +203,71 @@ public class ScreenService extends Service {
         display = projection.createVirtualDisplay("EkranNaPC", width, height, m.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.getSurface(), null,
                 captureHandler);
+
+        // Po obróceniu telefonu (np. film, gra w poziomie) zmieniamy rozmiar obrazu.
+        displayManager = (DisplayManager) getSystemService(DISPLAY_SERVICE);
+        displayManager.registerDisplayListener(displayListener, captureHandler);
     }
+
+    private DisplayMetrics currentMetrics() {
+        DisplayMetrics m = new DisplayMetrics();
+        ((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getRealMetrics(m);
+        return m;
+    }
+
+    /** Ustala docelowy rozmiar obrazu i tworzy ImageReader. Zwraca false, gdy rozmiar się nie zmienił. */
+    private boolean createReader(DisplayMetrics m) {
+        float scale = Math.min(1f, (float) MAX_SIDE / Math.max(m.widthPixels, m.heightPixels));
+        int w = Math.round(m.widthPixels * scale) & ~1;
+        int h = Math.round(m.heightPixels * scale) & ~1;
+        if (reader != null && w == width && h == height) return false;
+        width = w;
+        height = h;
+        reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
+        reader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
+            @Override
+            public void onImageAvailable(ImageReader r) {
+                onImage(r);
+            }
+        }, captureHandler);
+        return true;
+    }
+
+    private final DisplayManager.DisplayListener displayListener = new DisplayManager.DisplayListener() {
+        @Override
+        public void onDisplayChanged(int displayId) {
+            if (displayId != Display.DEFAULT_DISPLAY || display == null || stopping) return;
+            ImageReader old = reader;
+            DisplayMetrics m = currentMetrics();
+            if (!createReader(m)) return;
+            display.resize(width, height, m.densityDpi);
+            display.setSurface(reader.getSurface());
+            old.close();
+        }
+
+        @Override
+        public void onDisplayAdded(int displayId) {
+        }
+
+        @Override
+        public void onDisplayRemoved(int displayId) {
+        }
+    };
 
     /** Wywoływane na wątku capture: kopiuje najnowszą klatkę do bitmapy. */
     private void onImage(ImageReader r) {
+        if (r != reader) return; // klatka sprzed obrotu
         Image img = null;
         try {
             img = r.acquireLatestImage();
             if (img == null) return;
             Image.Plane plane = img.getPlanes()[0];
             int rowPixels = plane.getRowStride() / plane.getPixelStride();
-            if (bitmap == null || bitmap.getWidth() != rowPixels) {
-                bitmap = Bitmap.createBitmap(rowPixels, height, Bitmap.Config.ARGB_8888);
+            if (bitmap == null || bitmap.getWidth() != rowPixels || bitmap.getHeight() != img.getHeight()) {
+                bitmap = Bitmap.createBitmap(rowPixels, img.getHeight(), Bitmap.Config.ARGB_8888);
             }
             bitmap.copyPixelsFromBuffer(plane.getBuffer());
+            frameWidth = img.getWidth();
             dirty = true;
             scheduleEncode();
         } catch (Exception ignored) {
@@ -223,8 +291,8 @@ public class ScreenService extends Service {
             if (!dirty || bitmap == null || stopping) return;
             dirty = false;
             lastEncode = SystemClock.uptimeMillis();
-            Bitmap src = bitmap.getWidth() == width
-                    ? bitmap : Bitmap.createBitmap(bitmap, 0, 0, width, height);
+            Bitmap src = bitmap.getWidth() == frameWidth
+                    ? bitmap : Bitmap.createBitmap(bitmap, 0, 0, frameWidth, bitmap.getHeight());
             jpeg.reset();
             src.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, jpeg);
             if (src != bitmap) src.recycle();
@@ -300,6 +368,18 @@ public class ScreenService extends Service {
                 return;
             }
 
+            if (path.startsWith("/control")) {
+                String body = handleControl(path);
+                byte[] b = body.getBytes("UTF-8");
+                out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\n"
+                        + "Access-Control-Allow-Origin: *\r\n"
+                        + "Content-Length: " + b.length + "\r\nConnection: close\r\n\r\n")
+                        .getBytes(LATIN1));
+                out.write(b);
+                out.flush();
+                return;
+            }
+
             if (!path.startsWith("/stream")) {
                 byte[] html = ("<!doctype html><html><head><meta charset=utf-8>"
                         + "<meta name=viewport content='width=device-width'>"
@@ -343,6 +423,75 @@ public class ScreenService extends Service {
                 s.close();
             } catch (IOException ignored) {
             }
+        }
+    }
+
+    /**
+     * Wykonuje polecenie sterujace z komputera. Format to zapytanie GET, np.:
+     *   /control?a=tap&amp;x=0.5&amp;y=0.3
+     *   /control?a=swipe&amp;x=0.5&amp;y=0.8&amp;x2=0.5&amp;y2=0.2&amp;t=250
+     *   /control?a=long&amp;x=0.5&amp;y=0.3
+     *   /control?a=key&amp;k=back|home|recents
+     *   /control?a=text&amp;s=&lt;tekst zakodowany w URL&gt;
+     *   /control?a=del           (backspace)
+     * Zwraca "OK", gdy usluga sterowania dziala, lub "NOACCESS", gdy jeszcze
+     * nie zostala wlaczona w Ustawieniach -&gt; Ulatwienia dostepu.
+     */
+    private String handleControl(String path) {
+        ControlService c = ControlService.instance;
+        if (c == null) return "NOACCESS";
+        int q = path.indexOf('?');
+        if (q < 0) return "OK";
+        java.util.Map<String, String> p = new java.util.HashMap<>();
+        for (String pair : path.substring(q + 1).split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0) p.put(pair.substring(0, eq), urlDecode(pair.substring(eq + 1)));
+        }
+        String a = p.get("a");
+        if (a == null) return "OK";
+        try {
+            switch (a) {
+                case "tap":
+                    c.tap(f(p, "x"), f(p, "y"));
+                    break;
+                case "long":
+                    c.longPress(f(p, "x"), f(p, "y"));
+                    break;
+                case "swipe":
+                    long t = p.containsKey("t") ? Long.parseLong(p.get("t")) : 200;
+                    c.swipe(f(p, "x"), f(p, "y"), f(p, "x2"), f(p, "y2"), t);
+                    break;
+                case "key":
+                    String k = p.get("k");
+                    if ("back".equals(k)) c.global(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);
+                    else if ("home".equals(k)) c.global(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME);
+                    else if ("recents".equals(k)) c.global(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS);
+                    break;
+                case "text":
+                    String txt = p.get("s");
+                    if (txt != null) c.type(txt);
+                    break;
+                case "del":
+                    c.backspace();
+                    break;
+                default:
+                    break;
+            }
+        } catch (Exception ignored) {
+        }
+        return "OK";
+    }
+
+    private static float f(java.util.Map<String, String> p, String key) {
+        String v = p.get(key);
+        return v == null ? 0f : Float.parseFloat(v);
+    }
+
+    private static String urlDecode(String s) {
+        try {
+            return java.net.URLDecoder.decode(s, "UTF-8");
+        } catch (Exception e) {
+            return s;
         }
     }
 
@@ -447,6 +596,7 @@ public class ScreenService extends Service {
         } catch (IOException ignored) {
         }
         if (beacon != null) beacon.close();
+        if (displayManager != null) displayManager.unregisterDisplayListener(displayListener);
         if (display != null) display.release();
         if (projection != null) projection.stop();
         if (captureThread != null) {
@@ -459,6 +609,8 @@ public class ScreenService extends Service {
             });
             captureThread.quitSafely();
         }
+        if (cpuLock != null && cpuLock.isHeld()) cpuLock.release();
+        if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
         super.onDestroy();
     }
 }
