@@ -1,10 +1,9 @@
 /* Odkrywca – service worker: aplikacja działa offline, kafelki mapy są buforowane */
-const VERSION = 'odkrywca-v1';
+const VERSION = 'odkrywca-v2';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/geo.js', 'js/store.js', 'js/fog.js', 'js/achievements.js', 'js/app.js',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+  'vendor/leaflet/leaflet.css', 'vendor/leaflet/leaflet.js'
 ];
 const TILE_CACHE = 'odkrywca-tiles';
 const TILE_LIMIT = 1500;
@@ -54,7 +53,7 @@ self.addEventListener('fetch', e => {
   // pliki aplikacji: najpierw sieć (świeże wersje), offline – z pamięci
   e.respondWith(
     fetch(req).then(res => {
-      if (res.ok && (url.origin === location.origin || url.hostname === 'unpkg.com')) {
+      if (res.ok && url.origin === location.origin) {
         const copy = res.clone();
         caches.open(VERSION).then(c => c.put(req, copy));
       }

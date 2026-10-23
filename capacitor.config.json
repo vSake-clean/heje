@@ -1,0 +1,8 @@
+{
+  "appId": "pl.odkrywca.app",
+  "appName": "Odkrywca",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#eef0f8"
+  }
+}

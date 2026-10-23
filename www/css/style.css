@@ -13,8 +13,9 @@
   --radius: 20px;
   --fog-top: #eef0f8;
   --fog-bottom: #d9dcec;
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* na Androidzie Capacitor wstrzykuje --safe-area-inset-*; w przeglądarce działa env() */
+  --safe-top: max(var(--safe-area-inset-top, 0px), env(safe-area-inset-top, 0px));
+  --safe-bottom: max(var(--safe-area-inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
 }
 
 body.fog-dark {
@@ -242,7 +243,7 @@ body.placing .dock, body.placing .tracking-status { opacity: 0; pointer-events: 
 
 /* ---------- Panel ---------- */
 .panel {
-  position: fixed; z-index: 1200; right: 12px; top: calc(12px + var(--safe-top)); bottom: 12px; width: 400px; max-width: calc(100% - 24px);
+  position: fixed; z-index: 1200; right: 12px; top: calc(12px + var(--safe-top)); bottom: calc(12px + var(--safe-bottom)); width: 400px; max-width: calc(100% - 24px);
   background: var(--glass-strong); backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
   border: 1px solid var(--glass-border); box-shadow: var(--shadow); border-radius: 26px;
   display: flex; flex-direction: column; transform: translateX(calc(100% + 30px)); transition: transform .4s cubic-bezier(.2, .8, .2, 1);

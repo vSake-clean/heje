@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Odkrywca</string>
+    <string name="title_activity_main">Odkrywca</string>
+    <string name="package_name">pl.odkrywca.app</string>
+    <string name="custom_url_scheme">pl.odkrywca.app</string>
+</resources>

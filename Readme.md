@@ -4,19 +4,44 @@ Mapa świata ukryta pod delikatną mgłą, która rozwiewa się **tylko tam, gdz
 Włącz odkrywanie, wyjdź na spacer, jedź rowerem albo w podróż – i patrz, jak na mapie
 odsłaniają się ulice, parki i miasta, które poznałeś.
 
-## Jak uruchomić
+## 📱 Instalacja na Androidzie
 
-To aplikacja webowa (PWA) bez żadnej kompilacji.
+1. Pobierz **[`apk/Odkrywca.apk`](apk/Odkrywca.apk)** na telefon
+   (najnowszą wersję znajdziesz też w zakładce *Actions* → ostatni przebieg → artefakt `Odkrywca-apk`).
+2. Otwórz plik i zezwól na instalację z nieznanych źródeł, gdy telefon o to zapyta.
+3. Uruchom Odkrywcę, dotknij ▶ i zezwól na **lokalizację** oraz **powiadomienia**.
+4. Gdy aplikacja zaproponuje „Pozwól działać w tle”, zgódź się – na telefonach Xiaomi, Huawei,
+   Samsung itp. bez tego system potrafi usypiać aplikacje.
+
+### Działanie w tle
+
+Po włączeniu odkrywania startuje natywna **usługa pierwszoplanowa** Androida (z powiadomieniem
+„🧭 Odkrywanie aktywne · przebyto X km”). Zapisuje pozycję GPS **także przy wyłączonym ekranie,
+zminimalizowanej lub zamkniętej aplikacji**. Punkty trafiają do bufora w pamięci telefonu,
+a po otwarciu aplikacji mapa od razu odsłania całą przebytą trasę.
+Odkrywanie zatrzymasz przyciskiem ⏹ w aplikacji albo „Zatrzymaj” w powiadomieniu.
+
+Wymaga Androida 7.0 lub nowszego.
+
+### Budowanie APK samodzielnie
+
+Wymagane: Node.js 22, JDK 21, Android SDK (platforma 36).
 
 ```bash
-# w katalogu projektu:
-npx http-server -p 8080 .      # albo: python3 -m http.server 8080
+npm ci
+npm run apk        # → android/app/build/outputs/apk/release/app-release.apk
 ```
 
-Otwórz `http://localhost:8080`. Lokalizacja GPS działa tylko przez `https://` lub `localhost`,
-więc aby używać jej na telefonie, opublikuj katalog np. na GitHub Pages / Netlify
-i otwórz go w przeglądarce telefonu → „Dodaj do ekranu głównego”.
-Aplikacja działa wtedy jak natywna (pełny ekran, ikona, działanie offline).
+APK buduje się też automatycznie w GitHub Actions przy każdym pushu
+(`.github/workflows/android.yml`), a wypchnięcie tagu `v*` tworzy wydanie z plikiem APK.
+Wszystkie wersje podpisywane są tym samym kluczem (`android/app/odkrywca.keystore`),
+więc nowe APK instaluje się jako aktualizacja – bez utraty odkryć.
+
+## 🌐 Wersja w przeglądarce
+
+```bash
+npm run serve      # http://localhost:8080
+```
 
 ## Funkcje
 
@@ -33,7 +58,7 @@ Aplikacja działa wtedy jak natywna (pełny ekran, ikona, działanie offline).
 - 🖌️ **Pędzel** – odsłoń miejsca, w których byłeś dawniej (z wyborem daty), oraz **gumka**
 - 📥 Import tras: **GPX, KML, GeoJSON, historia lokalizacji Google (Takeout)** – także przeciągnij-i-upuść
 - 🎮 Symulowany spacer (demo), aby zobaczyć działanie bez wychodzenia z domu
-- 💡 Ekran nie gaśnie podczas odkrywania (Wake Lock API)
+- 🛰️ Na Androidzie: nagrywanie w tle przy wyłączonym ekranie (usługa pierwszoplanowa)
 
 **Postępy**
 - 📊 Statystyki: odkryta powierzchnia (km² i % Ziemi), dystans, seria dni, odkrycia dziś, najdalszy punkt, wykres 30 dni
@@ -51,19 +76,24 @@ Aplikacja działa wtedy jak natywna (pełny ekran, ikona, działanie offline).
 ## Struktura
 
 ```
-index.html            – układ interfejsu
-css/style.css         – wygląd (glassmorphism, tryb jasny/ciemny, mobile-first)
-js/geo.js             – geometria, formatowanie, style map i mgły, parsery GPX/KML/GeoJSON/Google
-js/store.js           – model danych: siatka odkrytych punktów, liczenie powierzchni, statystyki, zapis
-js/fog.js             – warstwa mgły Leaflet rysowana na canvasie
-js/achievements.js    – definicje odznak
-js/app.js             – logika aplikacji: GPS, pędzel, panele, import/eksport, podróż w czasie
-sw.js                 – service worker (offline)
+www/                         – aplikacja (HTML/CSS/JS), wspólna dla Androida i przeglądarki
+  index.html, css/style.css
+  js/geo.js                  – geometria, formatowanie, style map i mgły, parsery GPX/KML/GeoJSON/Google
+  js/store.js                – siatka odkrytych punktów, liczenie powierzchni, statystyki, zapis
+  js/fog.js                  – warstwa mgły Leaflet rysowana na canvasie
+  js/achievements.js         – definicje odznak
+  js/app.js                  – logika: GPS, pędzel, panele, import/eksport, podróż w czasie, most do Androida
+  vendor/leaflet/            – biblioteka map (lokalnie, działa offline)
+android/                     – projekt Android (Capacitor)
+  app/src/main/java/pl/odkrywca/app/
+    TrackingService.java     – usługa w tle nagrywająca GPS
+    PointStore.java          – bufor punktów zapisanych w tle
+    OdkrywcaPlugin.java      – most JS ↔ Android (start/stop, odbiór punktów, uprawnienia, bateria)
+apk/Odkrywca.apk             – gotowa aplikacja do instalacji
 ```
 
 ## Uwagi
 
-- Przeglądarki zwykle wstrzymują GPS, gdy aplikacja działa w tle lub ekran jest wyłączony –
-  dlatego podczas odkrywania ekran pozostaje włączony. Trasy nagrane w innej aplikacji
-  (Strava, Komoot, Google Maps) możesz później zaimportować jako GPX.
-- Mapy: © OpenStreetMap, Esri, OpenTopoMap. Rozpoznawanie miejsc: Nominatim (OpenStreetMap).
+- Wszystkie dane zostają na telefonie. Rób kopie zapasowe (Ustawienia → Eksportuj kopię), zwłaszcza przed odinstalowaniem.
+- Mapy wymagają internetu (ostatnio oglądane kafelki są buforowane). Mapy: © OpenStreetMap, Esri, OpenTopoMap.
+  Rozpoznawanie miejsc: Nominatim (OpenStreetMap).

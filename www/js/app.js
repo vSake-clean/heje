@@ -11,6 +11,16 @@
   S.load();
   const settings = S.state.settings;
 
+  /* Android (Capacitor): nagrywanie trasy przez natywną usługę działającą w tle */
+  const Cap = window.Capacitor;
+  const native = Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.isPluginAvailable && Cap.isPluginAvailable('Odkrywca')
+    ? {
+      call: (method, opts) => Cap.nativePromise('Odkrywca', method, opts || {}),
+      on: (event, cb) => Cap.addListener('Odkrywca', event, cb)
+    }
+    : null;
+  if (native) document.body.classList.add('native');
+
   /* ======================= MAPA ======================= */
 
   const startView = S.state.lastView || { lat: 52.07, lng: 19.48, zoom: 6 };
@@ -251,7 +261,7 @@
     S.save();
   }
 
-  function startTracking(source) {
+  function startTracking(source, resume) {
     if (tracking.active) stopTracking();
     tracking.active = true;
     tracking.source = source || 'gps';
@@ -266,7 +276,21 @@
     setFollow(true);
 
     if (tracking.source === 'sim') startSimulation();
-    else {
+    else if (native) {
+      if (!resume) {
+        native.call('start').then(r => {
+          if (!r.gpsEnabled) {
+            toast('📡 Lokalizacja w telefonie jest wyłączona – dotknij, aby ją włączyć', { type: 'warn', timeout: 7000 })
+              .addEventListener('click', () => native.call('openLocationSettings'));
+          }
+          batteryTip();
+        }).catch(() => {
+          toast('📵 Brak zgody na lokalizację. Zezwól na nią w ustawieniach telefonu.', { type: 'warn', timeout: 6000 });
+          stopTracking(true);
+        });
+      }
+      drainNative();
+    } else {
       if (!('geolocation' in navigator)) {
         toast('Twoja przeglądarka nie obsługuje lokalizacji 😢', { type: 'warn' });
         stopTracking();
@@ -279,8 +303,12 @@
     requestWakeLock();
   }
 
-  function stopTracking() {
+  function stopTracking(nativeAlreadyStopped) {
     if (!tracking.active) return;
+    if (native && tracking.source === 'gps') {
+      if (!nativeAlreadyStopped) native.call('stop').catch(() => {});
+      drainNative();
+    }
     if (tracking.watchId != null) navigator.geolocation.clearWatch(tracking.watchId);
     clearInterval(tracking.simTimer);
     tracking.watchId = null;
@@ -309,9 +337,9 @@
     handleFix(c.latitude, c.longitude, c.accuracy, pos.timestamp || Date.now(), c.heading);
   }
 
-  function handleFix(lat, lon, acc, time, heading) {
-    showMe(lat, lon, acc, heading);
-    if (settings.followMe) {
+  function handleFix(lat, lon, acc, time, heading, quiet) {
+    if (!quiet) showMe(lat, lon, acc, heading);
+    if (!quiet && settings.followMe && tracking.active) {
       if (map.getZoom() < 14) map.setView([lat, lon], 16);
       else map.panTo([lat, lon], { animate: true, duration: 0.6 });
     }
@@ -353,7 +381,7 @@
     $('#trackSession').textContent = G.formatDistance(tracking.session);
     if (added) {
       fog.redraw();
-      sparkle(lat, lon);
+      if (!quiet) sparkle(lat, lon);
     }
     S.save();
     scheduleHUD();
@@ -374,6 +402,68 @@
     setTimeout(() => el.remove(), 1100);
   }
 
+  /* Odbiór punktów zapisanych przez usługę w tle */
+  let draining = false, drainAgain = false;
+  function drainNative() {
+    if (!native) return;
+    if (draining) { drainAgain = true; return; }
+    draining = true;
+    native.call('drain').then(r => {
+      const pts = r.points || [];
+      pts.forEach((p, i) => handleFix(p[1], p[2], p[3], p[0], p[4] >= 0 ? p[4] : null, i < pts.length - 1));
+      if (pts.length) S.saveNow();
+      if (pts.length > 30) toast(`🛰️ Dodano trasę nagraną w tle: ${pts.length.toLocaleString('pl-PL')} punktów`);
+    }).catch(() => {}).finally(() => {
+      draining = false;
+      if (drainAgain) { drainAgain = false; drainNative(); }
+    });
+  }
+
+  function batteryTip() {
+    if (!native || S.state.batteryTipShown) return;
+    native.call('status').then(st => {
+      if (st.batteryUnrestricted) return;
+      S.state.batteryTipShown = true;
+      S.save();
+      openModal(`
+        <h2>🔋 Odkrywanie w tle</h2>
+        <p>Odkrywca zapisuje trasę także przy wyłączonym ekranie – w powiadomieniu zobaczysz, że działa.</p>
+        <p>Niektóre telefony (Xiaomi, Huawei, Samsung…) mimo to usypiają aplikacje, aby oszczędzać baterię.
+        Zezwól Odkrywcy działać bez ograniczeń, a żaden spacer nie umknie.</p>
+        <div class="modal-actions">
+          <button class="btn ghost" data-close>Później</button>
+          <button class="btn primary" id="batteryOk">Zezwól</button>
+        </div>`);
+      $('#batteryOk').onclick = () => { closeModal(); native.call('openBatterySettings'); };
+    }).catch(() => {});
+  }
+
+  if (native) {
+    let liveTimer = null;
+    native.on('location', () => {
+      if (document.visibilityState !== 'visible' || liveTimer) return;
+      liveTimer = setTimeout(() => { liveTimer = null; drainNative(); }, 800);
+    });
+    native.on('status', e => {
+      if (!e.tracking && tracking.active && tracking.source === 'gps') stopTracking(true);
+    });
+    native.call('status').then(st => {
+      if (st.tracking && !tracking.active) startTracking('gps', true);
+      else drainNative();
+    }).catch(() => {});
+
+    Cap.addListener('App', 'backButton', () => {
+      if ($('#modal').classList.contains('open')) closeModal();
+      else if (panelOpen) closePanel();
+      else if ($('#layersPop').classList.contains('open')) $('#layersPop').classList.remove('open');
+      else if ($('#searchBox').classList.contains('open')) $('#searchBox').classList.remove('open');
+      else if (brush.active) setBrush(false);
+      else if (pinPlacing.active) endPinPlacing();
+      else if (document.body.classList.contains('time-travel')) closeTimeTravel();
+      else Cap.nativePromise('App', 'minimizeApp', {}).catch(() => {});
+    });
+  }
+
   /* Symulacja spaceru – pozwala zobaczyć działanie bez wychodzenia z domu */
   function startSimulation() {
     const c = myPos ? L.latLng(myPos.lat, myPos.lon) : map.getCenter();
@@ -390,7 +480,7 @@
   }
 
   async function requestWakeLock() {
-    if (!settings.keepAwake || !('wakeLock' in navigator)) return;
+    if (native || !settings.keepAwake || !('wakeLock' in navigator)) return;
     try {
       tracking.wakeLock = await navigator.wakeLock.request('screen');
     } catch (e) { /* bez znaczenia */ }
@@ -399,7 +489,10 @@
     if (tracking.wakeLock) { tracking.wakeLock.release().catch(() => {}); tracking.wakeLock = null; }
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && tracking.active) requestWakeLock();
+    if (document.visibilityState === 'visible') {
+      if (tracking.active) requestWakeLock();
+      drainNative();
+    }
     if (document.visibilityState === 'hidden') S.saveNow();
   });
   window.addEventListener('pagehide', () => S.saveNow());
@@ -837,7 +930,8 @@
       <label class="range-field"><span>Ignoruj odczyty GPS gorsze niż <b id="vAcc">${s.maxAccuracy} m</b></span>
         <input type="range" id="sAcc" min="15" max="300" step="5" value="${s.maxAccuracy}"></label>
       ${toggle('sFollow', 'Podążaj za mną podczas odkrywania', s.followMe)}
-      ${toggle('sAwake', 'Nie wygaszaj ekranu podczas odkrywania', s.keepAwake)}
+      ${native ? `<button class="btn wide" id="sBattery">🔋 Pozwól działać w tle bez ograniczeń baterii</button>`
+        : toggle('sAwake', 'Nie wygaszaj ekranu podczas odkrywania', s.keepAwake)}
       ${toggle('sGeocode', 'Rozpoznawaj odwiedzone miasta i kraje', s.geocode, 'Używa OpenStreetMap Nominatim (wymaga internetu)')}
 
       <h4 class="sec-title">Wygląd</h4>
@@ -872,7 +966,8 @@
     bindRange('sAcc', 'vAcc', v => v + ' m', v => { s.maxAccuracy = v; S.save(); });
     bindRange('sOpacity', 'vOpacity', v => Math.round(v * 100) + '%', v => { s.fogOpacity = v; fog.setOpacity(v); S.save(); });
     $('#sFollow').onchange = e => setFollow(e.target.checked);
-    $('#sAwake').onchange = e => { s.keepAwake = e.target.checked; S.save(); if (!s.keepAwake) releaseWakeLock(); else if (tracking.active) requestWakeLock(); };
+    if (native) $('#sBattery').onclick = () => native.call('openBatterySettings');
+    else $('#sAwake').onchange = e => { s.keepAwake = e.target.checked; S.save(); if (!s.keepAwake) releaseWakeLock(); else if (tracking.active) requestWakeLock(); };
     $('#sGeocode').onchange = e => { s.geocode = e.target.checked; S.save(); };
     $('#sTrack').onchange = e => { s.showTrack = e.target.checked; S.save(); renderTracks(); };
     $('#sPins').onchange = e => { s.showPins = e.target.checked; S.save(); s.showPins ? pinLayer.addTo(map) : map.removeLayer(pinLayer); };
@@ -924,6 +1019,9 @@
     document.documentElement.style.setProperty('--fog-bottom', t.bottom);
     const meta = document.querySelector('meta[name=theme-color]');
     if (meta) meta.content = t.top;
+    if (Cap && Cap.isNativePlatform && Cap.isNativePlatform()) {
+      Cap.nativePromise('SystemBars', 'setStyle', { style: t.dark ? 'DARK' : 'LIGHT' }).catch(() => {});
+    }
   }
 
   function renderLayerPop() {
@@ -1161,7 +1259,7 @@
         <h1>Witaj, Odkrywco!</h1>
         <p class="lead">Cały świat spowija mgła. Rozwiewa się tylko tam, gdzie naprawdę byłeś.</p>
         <ul class="features">
-          <li><span>🚶</span><div><b>Włącz odkrywanie</b> i ruszaj na spacer – mapa odsłania się wokół Ciebie.</div></li>
+          <li><span>🚶</span><div><b>Włącz odkrywanie</b> i ruszaj na spacer – mapa odsłania się wokół Ciebie${native ? ', także gdy telefon jest w kieszeni, a ekran wyłączony' : ''}.</div></li>
           <li><span>🖌️</span><div><b>Pędzlem</b> odsłonisz miejsca z przeszłości, a <b>import GPX</b> wczyta Twoje dawne trasy.</div></li>
           <li><span>🏆</span><div>Zdobywaj <b>poziomy i odznaki</b>, zbieraj kraje i miasta w dzienniku.</div></li>
           <li><span>🔒</span><div>Twoje dane zostają <b>tylko na tym urządzeniu</b>.</div></li>
@@ -1186,10 +1284,10 @@
   checkAchievements(true);
   if (!S.state.onboarded) setTimeout(showWelcome, 400);
 
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  if (!native && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 
   // dostęp do debugowania z konsoli
-  window.odkrywca = { map, fog, store: S, startTracking, stopTracking, handleFix };
+  window.odkrywca = { map, fog, store: S, startTracking, stopTracking, handleFix, drainNative };
 })();
