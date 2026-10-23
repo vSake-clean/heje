@@ -52,25 +52,62 @@
     settings.baseMap = id;
     S.save();
     renderLayers();
+    applyTileFilter();
   }
 
-  const fog = new window.FogLayer({ theme: G.FOG, opacity: 0.92 });
+  const fog = new window.FogLayer({ theme: G.FOG.light, opacity: 0.92 });
   setBaseMap(settings.baseMap);
   fog.addTo(map);
 
   const trackRenderer = L.canvas({ padding: 0.3 });
   const trackLayer = L.layerGroup().addTo(map);
-  const liveTrack = L.polyline([], { color: '#2f5d50', weight: 3, opacity: 0.9, renderer: trackRenderer, interactive: false });
+  const liveTrack = L.polyline([], { weight: 3, opacity: 0.9, renderer: trackRenderer, interactive: false });
+
+  function trackColor() { return isDark() ? '#7fb8a4' : '#2f5d50'; }
 
   function renderTracks() {
     trackLayer.clearLayers();
     const lines = [];
     Object.keys(S.state.tracks).forEach(d => S.state.tracks[d].forEach(seg => { if (seg.length > 1) lines.push(seg); }));
     if (lines.length) {
-      L.polyline(lines, { color: '#2f5d50', weight: 2, opacity: 0.45, renderer: trackRenderer, interactive: false }).addTo(trackLayer);
+      L.polyline(lines, { color: trackColor(), weight: 2, opacity: 0.45, renderer: trackRenderer, interactive: false }).addTo(trackLayer);
     }
+    liveTrack.setStyle({ color: trackColor() });
     liveTrack.addTo(trackLayer);
   }
+
+  /* ======================= MOTYW ======================= */
+
+  function darkQuery() {
+    return window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  }
+  function isDark() {
+    const q = darkQuery();
+    return settings.theme === 'dark' || (settings.theme !== 'light' && !!(q && q.matches));
+  }
+
+  // w ciemnym trybie odwracamy kolory planu i mapy terenu; zdjęć satelitarnych nie ruszamy
+  function applyTileFilter() {
+    document.body.classList.toggle('tiles-dark', isDark() && settings.baseMap !== 'satellite');
+  }
+
+  function applyTheme() {
+    const dark = isDark();
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    fog.setTheme(dark ? G.FOG.dark : G.FOG.light);
+    applyTileFilter();
+    renderTracks();
+    const meta = document.querySelector('meta[name=theme-color]');
+    if (meta) meta.content = dark ? '#1d201f' : '#e4e2dc';
+    if (isNativeApp) Cap.nativePromise('SystemBars', 'setStyle', { style: dark ? 'DARK' : 'LIGHT' }).catch(() => {});
+  }
+  (function watchSystemTheme() {
+    const q = darkQuery();
+    if (!q) return;
+    const onChange = () => { if (settings.theme === 'system') applyTheme(); };
+    if (q.addEventListener) q.addEventListener('change', onChange);
+    else if (q.addListener) q.addListener(onChange);
+  })();
 
   const meIcon = L.divIcon({ className: 'me', html: '<span class="me-dir"></span><span class="me-dot"></span>', iconSize: [20, 20] });
   const meMarker = L.marker([0, 0], { icon: meIcon, interactive: false, keyboard: false, zIndexOffset: 1000 });
@@ -465,14 +502,18 @@
     let maxA = 0;
     const days = [];
     for (let d = today - 29; d <= today; d++) { const a = S.dayArea[d] || 0; maxA = Math.max(maxA, a); days.push([d, a]); }
-    const bars = days.map(([d, a]) => `<i title="${G.formatDay(d, { day: 'numeric', month: 'short' })}: ${G.formatArea(a)}" style="height:${maxA ? Math.max(a ? 4 : 0, a / maxA * 100) : 0}%"></i>`).join('');
+    const bars = days.map(([d, a]) => `<i class="${a ? '' : 'zero'}" title="${G.formatDay(d, { day: 'numeric', month: 'short' })}: ${G.formatArea(a)}" style="height:${a && maxA ? Math.max(4, a / maxA * 100) : 0}%"></i>`).join('');
 
     $('#paneStats').innerHTML = `
+      <h3>Dziś</h3>
+      <div class="rows">
+        ${row('Odkryta powierzchnia', G.formatArea(S.dayArea[today] || 0))}
+        ${row('Dystans', G.formatDistance(st.activeDays[today] || 0))}
+      </div>
+      <h3>Łącznie</h3>
       <div class="rows">
         ${row('Odkryta powierzchnia', G.formatArea(S.area))}
-        ${row('Odkryte dziś', G.formatArea(S.dayArea[today] || 0))}
-        ${row('Przebyty dystans', G.formatDistance(st.distance))}
-        ${row('Dystans dziś', G.formatDistance(st.activeDays[today] || 0))}
+        ${row('Dystans', G.formatDistance(st.distance))}
         ${row('Dni w ruchu', S.activeDaySet().size)}
         ${row('Seria dni', `${S.streak()} (najdłuższa ${S.bestStreak()})`)}
         ${row('Kraje', countries)}
@@ -485,7 +526,7 @@
       ${first != null ? `<p class="muted">Pierwszy zapis: ${G.formatDay(first)}</p>` : ''}
       <div class="actions">
         <button class="btn" id="statFit">Pokaż całość</button>
-        <button class="btn" id="statTime" ${first == null ? 'disabled' : ''}>Historia</button>
+        <button class="btn" id="statTime" ${first == null || first >= today ? 'disabled' : ''}>Historia</button>
       </div>`;
     $('#statFit').onclick = fitDiscoveries;
     $('#statTime').onclick = openTimeTravel;
@@ -511,7 +552,7 @@
         const v = Math.min(a.value(st), a.goal);
         const progress = done
           ? 'zdobyto ' + new Date(got[a.id]).toLocaleDateString('pl-PL')
-          : a.fmt ? `${a.fmt(v)} z ${a.fmt(a.goal)}` : 'jeszcze nie';
+          : a.fmt ? a.fmt(v, a.goal) : 'jeszcze nie';
         return `<li class="${done ? 'done' : ''}">
           <span class="mark" aria-hidden="true"></span>
           <div><b>${a.name}</b><small>${a.desc}</small></div>
@@ -545,9 +586,13 @@
 
   function renderSettings() {
     const bg = native && nativeStatus;
+    const themes = { system: 'Systemowy', light: 'Jasny', dark: 'Ciemny' };
     $('#paneSettings').innerHTML = `
       <h3>Mapa</h3>
       <div class="radio">${baseMapOptions()}</div>
+      <h3>Wygląd</h3>
+      <div class="radio" id="sTheme">${Object.entries(themes).map(([id, n]) =>
+        `<button role="radio" aria-checked="${settings.theme === id}" data-theme-opt="${id}">${n}</button>`).join('')}</div>
       <h3>Miejscowości</h3>
       <label class="check"><input type="checkbox" id="sGeocode" ${settings.geocode ? 'checked' : ''}>
         <span>Rozpoznawaj odwiedzone miejscowości<small>Wysyła przybliżoną pozycję do OpenStreetMap Nominatim.</small></span></label>
@@ -567,6 +612,12 @@
         Dane są tylko na tym urządzeniu.</p>
       <p class="muted small">Mapy: OpenStreetMap, Esri, OpenTopoMap. Punkty: ${S.pointCount.toLocaleString('pl-PL')}.</p>`;
     bindBaseMapOptions($('#paneSettings .radio'));
+    $$('#sTheme [data-theme-opt]').forEach(b => b.onclick = () => {
+      settings.theme = b.dataset.themeOpt;
+      S.save();
+      applyTheme();
+      renderSettings();
+    });
     $('#sGeocode').onchange = e => { settings.geocode = e.target.checked; S.save(); };
     if (native) {
       $('#sBg').onclick = () => native.call('openAppSettings');
@@ -689,8 +740,7 @@
 
   /* ======================= START ======================= */
 
-  if (isNativeApp) Cap.nativePromise('SystemBars', 'setStyle', { style: 'LIGHT' }).catch(() => {});
-  renderTracks();
+  applyTheme();
   updateSummary();
   checkAchievements(true);
   startRecording();

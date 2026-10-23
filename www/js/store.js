@@ -20,7 +20,7 @@
       tracks: {},          // dzień -> lista odcinków [[lat,lon],...]
       stats: { distance: 0, activeDays: {}, home: null, maxFromHome: 0, nightOwl: false, earlyBird: false },
       achievements: {},
-      settings: { baseMap: 'streets', geocode: true },
+      settings: { baseMap: 'streets', geocode: true, theme: 'system' },
       lastView: null
     };
   }
@@ -55,7 +55,8 @@
             achievements: s.achievements || {},
             settings: {
               baseMap: s.settings && G.BASE_MAPS[s.settings.baseMap] ? s.settings.baseMap : 'streets',
-              geocode: !(s.settings && s.settings.geocode === false)
+              geocode: !(s.settings && s.settings.geocode === false),
+              theme: s.settings && ['light', 'dark'].includes(s.settings.theme) ? s.settings.theme : 'system'
             },
             lastView: s.lastView || null
           };

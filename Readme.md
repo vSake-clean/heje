@@ -30,6 +30,7 @@ Punkty trafiają do bufora w pamięci telefonu. Po otwarciu aplikacji mapa odsł
 ## Co jest w aplikacji
 
 - mapa z mgłą i trzy rodzaje podkładu: plan, teren, satelita,
+- jasny i ciemny tryb (domyślnie jak w telefonie),
 - odkryta powierzchnia i dystans (łącznie i dziś), seria dni, wykres z 30 dni,
 - historia: suwak pokazujący stan mapy w wybranym dniu,
 - odwiedzone kraje i miejscowości rozpoznawane automatycznie (OpenStreetMap Nominatim, można wyłączyć),

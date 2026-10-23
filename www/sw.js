@@ -1,5 +1,5 @@
 /* Odkrywca: service worker. Aplikacja działa offline, kafelki mapy są buforowane. */
-const VERSION = 'odkrywca-v3';
+const VERSION = 'odkrywca-v4';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/geo.js', 'js/store.js', 'js/fog.js', 'js/achievements.js', 'js/app.js',

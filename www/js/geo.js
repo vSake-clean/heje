@@ -72,8 +72,11 @@
     }
   };
 
-  /* Mgła: jeden spokojny, papierowy kolor */
-  const FOG = { top: '#e4e2dc', bottom: '#dcdad3', tint: '#f3f2ee', shade: '#b9b6ad', texture: 0.45 };
+  /* Mgła: spokojny papierowy kolor w jasnym trybie, grafit w ciemnym */
+  const FOG = {
+    light: { top: '#e4e2dc', bottom: '#dcdad3', tint: '#f3f2ee', shade: '#b9b6ad', texture: 0.45 },
+    dark: { top: '#363b39', bottom: '#2f3432', tint: '#454b48', shade: '#1f2321', texture: 0.5 }
+  };
 
   global.Geo = {
     EARTH_R, EARTH_AREA_KM2, DEG, M_PER_DEG_LAT,

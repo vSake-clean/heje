@@ -3,9 +3,11 @@
   'use strict';
 
   const km2 = 1e6;
-  const area = v => (v / km2).toFixed(2).replace('.', ',') + ' km²';
-  const km = v => (v / 1000).toFixed(1).replace('.', ',') + ' km';
-  const num = v => String(Math.floor(v));
+  // postęp w formie "0,31 / 5 km²"
+  const dec = (v, d) => v.toFixed(d).replace('.', ',').replace(/,0+$/, '');
+  const area = (v, goal) => `${dec(v / km2, 2)} / ${dec(goal / km2, 1)} km²`;
+  const km = (v, goal) => `${dec(v / 1000, 1)} / ${dec(goal / 1000, 1)} km`;
+  const num = (v, goal) => `${Math.floor(v)} / ${goal}`;
 
   // value: bieżąca wartość, goal: próg, fmt: jak pokazać postęp
   const A = [
