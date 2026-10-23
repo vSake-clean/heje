@@ -25,12 +25,14 @@ import org.json.JSONException;
 import java.util.List;
 
 /**
- * Most między interfejsem (JavaScript) a usługą nagrywania trasy w tle.
+ * Most między interfejsem (JavaScript) a usługą zapisu trasy. Celowo nie ma metody
+ * zatrzymującej zapis: aplikacja działa cały czas.
  */
 @CapacitorPlugin(
     name = "Odkrywca",
     permissions = {
         @Permission(alias = "location", strings = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION }),
+        @Permission(alias = "background", strings = { Manifest.permission.ACCESS_BACKGROUND_LOCATION }),
         @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS })
     }
 )
@@ -65,6 +67,7 @@ public class OdkrywcaPlugin extends Plugin {
 
     /* ---------- metody dostępne z JS ---------- */
 
+    /** Prosi o zgodę na lokalizację (i powiadomienia), po czym uruchamia zapis. */
     @PluginMethod
     public void start(PluginCall call) {
         if (getPermissionState("location") != PermissionState.GRANTED) {
@@ -93,43 +96,32 @@ public class OdkrywcaPlugin extends Plugin {
 
     @PermissionCallback
     private void notificationPermsCallback(PluginCall call) {
-        // powiadomienie nie jest konieczne do działania – startujemy niezależnie od odpowiedzi
         doStart(call);
     }
 
     private void doStart(PluginCall call) {
-        Context ctx = getContext();
-        LocationManager lm = (LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
-        boolean gpsOn = lm != null && lm.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        try {
-            TrackingService.start(ctx);
-        } catch (Exception e) {
-            call.reject("Nie udało się uruchomić usługi: " + e.getMessage());
-            return;
-        }
-        JSObject r = new JSObject();
-        r.put("tracking", true);
-        r.put("gpsEnabled", gpsOn);
-        call.resolve(r);
+        TrackingService.ensureRunning(getContext());
+        call.resolve(statusObject());
     }
 
+    /** Zgoda "zawsze" pozwala wznowić zapis po restarcie telefonu bez otwierania aplikacji. */
     @PluginMethod
-    public void stop(PluginCall call) {
-        TrackingService.stop(getContext());
-        JSObject r = new JSObject();
-        r.put("tracking", false);
-        call.resolve(r);
+    public void requestBackground(PluginCall call) {
+        if (hasBackgroundPermission()) {
+            call.resolve(statusObject());
+            return;
+        }
+        requestPermissionForAlias("background", call, "backgroundPermsCallback");
+    }
+
+    @PermissionCallback
+    private void backgroundPermsCallback(PluginCall call) {
+        call.resolve(statusObject());
     }
 
     @PluginMethod
     public void status(PluginCall call) {
-        Context ctx = getContext();
-        JSObject r = new JSObject();
-        r.put("tracking", TrackingService.isRunning());
-        r.put("pending", PointStore.count(ctx));
-        r.put("batteryUnrestricted", isIgnoringBatteryOptimizations());
-        r.put("locationPermission", getPermissionState("location").toString());
-        call.resolve(r);
+        call.resolve(statusObject());
     }
 
     @PluginMethod
@@ -141,7 +133,7 @@ public class OdkrywcaPlugin extends Plugin {
             try {
                 for (double v : p) a.put(v);
             } catch (JSONException e) {
-                continue; // wartości nieskończone – pomijamy punkt
+                continue; // wartości nieskończone, pomijamy punkt
             }
             arr.put(a);
         }
@@ -154,33 +146,58 @@ public class OdkrywcaPlugin extends Plugin {
     @PluginMethod
     public void openBatterySettings(PluginCall call) {
         Context ctx = getContext();
-        try {
-            Intent i;
-            if (!isIgnoringBatteryOptimizations()) {
-                i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.getPackageName()));
-            } else {
-                i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.getPackageName()));
-            }
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            ctx.startActivity(i);
-        } catch (Exception e) {
-            Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.getPackageName()));
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            ctx.startActivity(i);
-        }
+        Intent i = isIgnoringBatteryOptimizations()
+            ? new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.getPackageName()))
+            : new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.getPackageName()));
+        startSafely(i);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        startSafely(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getContext().getPackageName())));
         call.resolve();
     }
 
     @PluginMethod
     public void openLocationSettings(PluginCall call) {
-        Intent i = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        getContext().startActivity(i);
+        startSafely(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
         call.resolve();
+    }
+
+    /* ---------- pomocnicze ---------- */
+
+    private JSObject statusObject() {
+        Context ctx = getContext();
+        LocationManager lm = (LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
+        JSObject r = new JSObject();
+        r.put("tracking", TrackingService.isRunning());
+        r.put("location", getPermissionState("location") == PermissionState.GRANTED);
+        r.put("background", hasBackgroundPermission());
+        r.put("gpsEnabled", lm != null && lm.isProviderEnabled(LocationManager.GPS_PROVIDER));
+        r.put("batteryUnrestricted", isIgnoringBatteryOptimizations());
+        return r;
+    }
+
+    private boolean hasBackgroundPermission() {
+        // przed Androidem 10 zgoda na lokalizację obejmowała też działanie w tle
+        if (Build.VERSION.SDK_INT < 29) return getPermissionState("location") == PermissionState.GRANTED;
+        return getPermissionState("background") == PermissionState.GRANTED;
     }
 
     private boolean isIgnoringBatteryOptimizations() {
         PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
         return pm != null && pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+    }
+
+    private void startSafely(Intent i) {
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getContext().startActivity(i);
+        } catch (Exception e) {
+            Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getContext().getPackageName()));
+            fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(fallback);
+        }
     }
 }

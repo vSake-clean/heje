@@ -9,7 +9,6 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.location.Location;
@@ -28,15 +27,11 @@ import androidx.core.content.ContextCompat;
 import java.util.Locale;
 
 /**
- * Usługa pierwszoplanowa nagrywająca pozycję GPS także wtedy, gdy aplikacja jest
- * zminimalizowana, a ekran wyłączony. Punkty trafiają do {@link PointStore}.
+ * Usługa pierwszoplanowa, która cały czas zapisuje pozycję GPS. Nie ma przycisku
+ * zatrzymania: działa od pierwszego uruchomienia aplikacji, wraca po restarcie
+ * telefonu i po aktualizacji. Punkty trafiają do {@link PointStore}.
  */
 public class TrackingService extends Service implements LocationListener {
-
-    static final String ACTION_START = "pl.odkrywca.app.START";
-    static final String ACTION_STOP = "pl.odkrywca.app.STOP";
-    static final String PREFS = "odkrywca";
-    static final String PREF_TRACKING = "tracking";
 
     private static final String CHANNEL_ID = "tracking";
     private static final int NOTIFICATION_ID = 1907;
@@ -58,37 +53,24 @@ public class TrackingService extends Service implements LocationListener {
         return running;
     }
 
-    static void start(Context ctx) {
-        Intent i = new Intent(ctx, TrackingService.class).setAction(ACTION_START);
-        ContextCompat.startForegroundService(ctx, i);
+    /** Uruchamia usługę, jeśli są uprawnienia. Wywołanie, gdy już działa, nic nie zmienia. */
+    static void ensureRunning(Context ctx) {
+        if (!hasLocationPermission(ctx)) return;
+        try {
+            ContextCompat.startForegroundService(ctx, new Intent(ctx, TrackingService.class));
+        } catch (Exception ignored) {
+            // system nie pozwolił wystartować z tła; spróbujemy przy następnym otwarciu aplikacji
+        }
     }
 
-    static void stop(Context ctx) {
-        prefs(ctx).edit().putBoolean(PREF_TRACKING, false).apply();
-        ctx.stopService(new Intent(ctx, TrackingService.class));
-    }
-
-    static SharedPreferences prefs(Context ctx) {
-        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    static boolean hasLocationPermission(Context ctx) {
+        return ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            || ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        String action = intent != null ? intent.getAction() : null;
-
-        if (ACTION_STOP.equals(action)) {
-            stop(this);
-            OdkrywcaPlugin.emitStatus(false);
-            return START_NOT_STICKY;
-        }
-
-        // intent == null oznacza wznowienie przez system po zabiciu procesu
-        if (intent == null && !prefs(this).getBoolean(PREF_TRACKING, false)) {
-            stopSelf();
-            return START_NOT_STICKY;
-        }
-
-        if (!hasLocationPermission()) {
+        if (!hasLocationPermission(this)) {
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -100,14 +82,13 @@ public class TrackingService extends Service implements LocationListener {
                 startForeground(NOTIFICATION_ID, buildNotification());
             }
         } catch (Exception e) {
-            // Android może odmówić startu usługi lokalizacji z tła – wtedy użytkownik musi otworzyć aplikację
+            // bez zgody "zawsze" Android nie pozwala wystartować z tła; aplikacja uruchomi usługę po otwarciu
             stopSelf();
             return START_NOT_STICKY;
         }
 
         if (!running) {
             running = true;
-            prefs(this).edit().putBoolean(PREF_TRACKING, true).apply();
             acquireWakeLock();
             requestUpdates();
             OdkrywcaPlugin.emitStatus(true);
@@ -126,7 +107,7 @@ public class TrackingService extends Service implements LocationListener {
             // brak dostawcy GPS
         }
         try {
-            // sieć jako zapas, gdy GPS nie ma sygnału (np. w budynku) – używana tylko bez świeżego GPS
+            // sieć jako zapas, gdy GPS nie ma sygnału; używana tylko bez świeżego odczytu GPS
             locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 10000, 20f, this, looper);
         } catch (Exception ignored) {
             // brak dostawcy sieciowego
@@ -141,6 +122,8 @@ public class TrackingService extends Service implements LocationListener {
         else if (now - lastGpsFix < 30000) return;
 
         if (!loc.hasAccuracy() || loc.getAccuracy() > MAX_ACCURACY_M) return;
+        // odrzucamy pozycje z aplikacji do podrabiania lokalizacji
+        if (isMock(loc)) return;
 
         if (lastGood != null) {
             float d = lastGood.distanceTo(loc);
@@ -155,11 +138,17 @@ public class TrackingService extends Service implements LocationListener {
             loc.getAccuracy(), loc.hasBearing() ? loc.getBearing() : -1f);
         OdkrywcaPlugin.emitLocation();
 
-        if (now - lastNotificationUpdate > 10000) {
+        if (now - lastNotificationUpdate > 15000) {
             lastNotificationUpdate = now;
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.notify(NOTIFICATION_ID, buildNotification());
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static boolean isMock(Location loc) {
+        if (Build.VERSION.SDK_INT >= 31) return loc.isMock();
+        return loc.isFromMockProvider();
     }
 
     @Override
@@ -174,8 +163,8 @@ public class TrackingService extends Service implements LocationListener {
     private Notification buildNotification() {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null && nm.getNotificationChannel(CHANNEL_ID) == null) {
-            NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "Odkrywanie w tle", NotificationManager.IMPORTANCE_LOW);
-            ch.setDescription("Informuje, że Odkrywca zapisuje Twoją trasę");
+            NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "Zapis trasy", NotificationManager.IMPORTANCE_LOW);
+            ch.setDescription("Informuje, że Odkrywca zapisuje odwiedzone miejsca");
             ch.setShowBadge(false);
             nm.createNotificationChannel(ch);
         }
@@ -183,36 +172,28 @@ public class TrackingService extends Service implements LocationListener {
         int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
         Intent open = new Intent(this, MainActivity.class).setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent openPi = PendingIntent.getActivity(this, 0, open, piFlags);
-        Intent stopIntent = new Intent(this, TrackingService.class).setAction(ACTION_STOP);
-        PendingIntent stopPi = PendingIntent.getService(this, 1, stopIntent, piFlags);
 
         String text = sessionPoints == 0
-            ? "Szukam sygnału GPS…"
-            : String.format(Locale.forLanguageTag("pl-PL"), "Przebyto %s · mapa odsłania się w tle", formatDistance(sessionMeters));
+            ? "Czekam na sygnał GPS"
+            : "Od włączenia telefonu: " + formatDistance(sessionMeters);
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_compass)
-            .setContentTitle("🧭 Odkrywanie aktywne")
+            .setContentTitle("Zapis trasy włączony")
             .setContentText(text)
-            .setColor(0xFFFF7A59)
+            .setColor(0xFF2F5D50)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(openPi)
-            .addAction(0, "Zatrzymaj", stopPi)
             .build();
     }
 
     private static String formatDistance(double m) {
         if (m < 1000) return Math.round(m) + " m";
-        return String.format(Locale.forLanguageTag("pl-PL"), "%.2f km", m / 1000.0);
-    }
-
-    private boolean hasLocationPermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        return String.format(Locale.forLanguageTag("pl-PL"), "%.1f km", m / 1000.0);
     }
 
     @SuppressLint("WakelockTimeout")

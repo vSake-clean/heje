@@ -29,7 +29,7 @@ final class PointStore {
             try (FileWriter w = new FileWriter(new File(ctx.getFilesDir(), FILE), true)) {
                 w.write(line);
             } catch (IOException ignored) {
-                // brak miejsca na dysku – punkt pomijamy
+                // brak miejsca na dysku, punkt pomijamy
             }
         }
     }

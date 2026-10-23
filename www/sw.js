@@ -1,5 +1,5 @@
-/* Odkrywca – service worker: aplikacja działa offline, kafelki mapy są buforowane */
-const VERSION = 'odkrywca-v2';
+/* Odkrywca: service worker. Aplikacja działa offline, kafelki mapy są buforowane. */
+const VERSION = 'odkrywca-v3';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/geo.js', 'js/store.js', 'js/fog.js', 'js/achievements.js', 'js/app.js',
@@ -33,7 +33,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // kafelki mapy: najpierw sieć, w razie braku – pamięć podręczna
+  // kafelki mapy: najpierw sieć, w razie braku pamięć podręczna
   if (TILE_HOSTS.test(url.hostname)) {
     e.respondWith(
       fetch(req).then(res => {
@@ -50,7 +50,7 @@ self.addEventListener('fetch', e => {
   // wyszukiwanie miejsc zawsze z sieci
   if (url.hostname.includes('nominatim')) return;
 
-  // pliki aplikacji: najpierw sieć (świeże wersje), offline – z pamięci
+  // pliki aplikacji: najpierw sieć (świeże wersje), offline z pamięci
   e.respondWith(
     fetch(req).then(res => {
       if (res.ok && url.origin === location.origin) {

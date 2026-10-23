@@ -11,4 +11,11 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(OdkrywcaPlugin.class);
         super.onCreate(savedInstanceState);
     }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // zapis działa zawsze; po każdym otwarciu upewniamy się, że usługa żyje
+        TrackingService.ensureRunning(this);
+    }
 }

@@ -1,37 +1,31 @@
-/* Odkrywca – odznaki do zdobycia */
+/* Odkrywca: odznaki. Każda ma prosty, sprawdzalny próg. */
 (function (global) {
   'use strict';
 
   const km2 = 1e6;
+  const area = v => (v / km2).toFixed(2).replace('.', ',') + ' km²';
+  const km = v => (v / 1000).toFixed(1).replace('.', ',') + ' km';
+  const num = v => String(Math.floor(v));
+
+  // value: bieżąca wartość, goal: próg, fmt: jak pokazać postęp
   const A = [
-    { id: 'first',    icon: '👣', name: 'Pierwszy krok',      desc: 'Odsłoń pierwsze miejsce na mapie',            test: s => s.points >= 1 },
-    { id: 'area1',    icon: '🌱', name: 'Mały ogródek',       desc: 'Odkryj 0,5 km² świata',                       test: s => s.area >= 0.5 * km2, progress: s => s.area / (0.5 * km2) },
-    { id: 'area5',    icon: '🏘️', name: 'Moja okolica',       desc: 'Odkryj 5 km²',                                test: s => s.area >= 5 * km2, progress: s => s.area / (5 * km2) },
-    { id: 'area25',   icon: '🏙️', name: 'Pan na mieście',     desc: 'Odkryj 25 km²',                               test: s => s.area >= 25 * km2, progress: s => s.area / (25 * km2) },
-    { id: 'area100',  icon: '🗺️', name: 'Kartograf',          desc: 'Odkryj 100 km²',                              test: s => s.area >= 100 * km2, progress: s => s.area / (100 * km2) },
-    { id: 'area1000', icon: '🌋', name: 'Władca krain',       desc: 'Odkryj 1000 km²',                             test: s => s.area >= 1000 * km2, progress: s => s.area / (1000 * km2) },
-    { id: 'dist5',    icon: '🚶', name: 'Spacerowicz',        desc: 'Przejdź 5 km z włączonym odkrywaniem',        test: s => s.distance >= 5000, progress: s => s.distance / 5000 },
-    { id: 'dist42',   icon: '🏃', name: 'Maratończyk',        desc: 'Pokonaj łącznie 42,195 km',                   test: s => s.distance >= 42195, progress: s => s.distance / 42195 },
-    { id: 'dist500',  icon: '🚴', name: 'Długodystansowiec',  desc: 'Pokonaj łącznie 500 km',                      test: s => s.distance >= 500000, progress: s => s.distance / 500000 },
-    { id: 'dist5000', icon: '🚂', name: 'W drodze',           desc: 'Pokonaj łącznie 5000 km',                     test: s => s.distance >= 5e6, progress: s => s.distance / 5e6 },
-    { id: 'far50',    icon: '🧭', name: 'Za horyzontem',      desc: 'Bądź 50 km od miejsca pierwszego odkrycia',   test: s => s.maxFromHome >= 50000, progress: s => s.maxFromHome / 50000 },
-    { id: 'far1000',  icon: '✈️', name: 'Daleka podróż',      desc: 'Bądź 1000 km od miejsca pierwszego odkrycia', test: s => s.maxFromHome >= 1e6, progress: s => s.maxFromHome / 1e6 },
-    { id: 'city1',    icon: '🏡', name: 'Lokalny patriota',   desc: 'Odkryj pierwszą miejscowość',                 test: s => s.cities >= 1 },
-    { id: 'city10',   icon: '🏰', name: 'Wędrowny kupiec',    desc: 'Odwiedź 10 miejscowości',                     test: s => s.cities >= 10, progress: s => s.cities / 10 },
-    { id: 'city50',   icon: '🗼', name: 'Kolekcjoner miast',  desc: 'Odwiedź 50 miejscowości',                     test: s => s.cities >= 50, progress: s => s.cities / 50 },
-    { id: 'country2', icon: '🛂', name: 'Przez granicę',      desc: 'Odwiedź 2 kraje',                             test: s => s.countries >= 2, progress: s => s.countries / 2 },
-    { id: 'country5', icon: '🌍', name: 'Obieżyświat',        desc: 'Odwiedź 5 krajów',                            test: s => s.countries >= 5, progress: s => s.countries / 5 },
-    { id: 'country15',icon: '🪐', name: 'Obywatel świata',    desc: 'Odwiedź 15 krajów',                           test: s => s.countries >= 15, progress: s => s.countries / 15 },
-    { id: 'streak3',  icon: '🔥', name: 'Rozgrzewka',         desc: 'Odkrywaj 3 dni z rzędu',                      test: s => s.bestStreak >= 3, progress: s => s.bestStreak / 3 },
-    { id: 'streak7',  icon: '📅', name: 'Tydzień przygód',    desc: 'Odkrywaj 7 dni z rzędu',                      test: s => s.bestStreak >= 7, progress: s => s.bestStreak / 7 },
-    { id: 'streak30', icon: '🏅', name: 'Niezłomny',          desc: 'Odkrywaj 30 dni z rzędu',                     test: s => s.bestStreak >= 30, progress: s => s.bestStreak / 30 },
-    { id: 'day1km',   icon: '⚡', name: 'Dzień odkrywcy',     desc: 'Odsłoń 1 km² jednego dnia',                   test: s => s.bestDayArea >= km2, progress: s => s.bestDayArea / km2 },
-    { id: 'night',    icon: '🦉', name: 'Nocny marek',        desc: 'Odkrywaj między północą a 4:00',              test: s => s.nightOwl },
-    { id: 'early',    icon: '🐦', name: 'Ranny ptaszek',      desc: 'Odkrywaj między 5:00 a 7:00',                 test: s => s.earlyBird },
-    { id: 'pin1',     icon: '📍', name: 'Pamiątka',           desc: 'Dodaj pierwsze wspomnienie na mapie',         test: s => s.pins >= 1 },
-    { id: 'pin10',    icon: '📔', name: 'Kronikarz',          desc: 'Dodaj 10 wspomnień',                          test: s => s.pins >= 10, progress: s => s.pins / 10 },
-    { id: 'level10',  icon: '⭐', name: 'Doświadczony',       desc: 'Osiągnij 10. poziom',                         test: s => s.level >= 10, progress: s => s.level / 10 },
-    { id: 'level25',  icon: '🌟', name: 'Mistrz odkryć',      desc: 'Osiągnij 25. poziom',                         test: s => s.level >= 25, progress: s => s.level / 25 }
+    { id: 'area1',     name: 'Najbliższa okolica', desc: 'Odkryj 0,5 km²',                         value: s => s.area,        goal: 0.5 * km2, fmt: area },
+    { id: 'area5',     name: 'Dzielnica',          desc: 'Odkryj 5 km²',                           value: s => s.area,        goal: 5 * km2,   fmt: area },
+    { id: 'area25',    name: 'Miasto',             desc: 'Odkryj 25 km²',                          value: s => s.area,        goal: 25 * km2,  fmt: area },
+    { id: 'area100',   name: 'Region',             desc: 'Odkryj 100 km²',                         value: s => s.area,        goal: 100 * km2, fmt: area },
+    { id: 'dist5',     name: 'Pierwsze kilometry', desc: 'Przebądź 5 km',                          value: s => s.distance,    goal: 5000,      fmt: km },
+    { id: 'dist42',    name: 'Maraton',            desc: 'Przebądź łącznie 42,2 km',               value: s => s.distance,    goal: 42195,     fmt: km },
+    { id: 'dist500',   name: 'Pięćset',            desc: 'Przebądź łącznie 500 km',                value: s => s.distance,    goal: 500000,    fmt: km },
+    { id: 'far50',     name: 'Za horyzontem',      desc: 'Bądź 50 km od miejsca pierwszego zapisu', value: s => s.maxFromHome, goal: 50000,     fmt: km },
+    { id: 'far1000',   name: 'Daleko od domu',     desc: 'Bądź 1000 km od miejsca pierwszego zapisu', value: s => s.maxFromHome, goal: 1e6,     fmt: km },
+    { id: 'city10',    name: 'Dziesięć miejscowości', desc: 'Odwiedź 10 miejscowości',             value: s => s.cities,      goal: 10,        fmt: num },
+    { id: 'city50',    name: 'Pięćdziesiąt miejscowości', desc: 'Odwiedź 50 miejscowości',         value: s => s.cities,      goal: 50,        fmt: num },
+    { id: 'country2',  name: 'Za granicą',         desc: 'Odwiedź drugi kraj',                     value: s => s.countries,   goal: 2,         fmt: num },
+    { id: 'country10', name: 'Dziesięć krajów',    desc: 'Odwiedź 10 krajów',                      value: s => s.countries,   goal: 10,        fmt: num },
+    { id: 'streak7',   name: 'Tydzień',            desc: 'Ruszaj się 7 dni z rzędu',               value: s => s.bestStreak,  goal: 7,         fmt: num },
+    { id: 'streak30',  name: 'Miesiąc',            desc: 'Ruszaj się 30 dni z rzędu',              value: s => s.bestStreak,  goal: 30,        fmt: num },
+    { id: 'night',     name: 'Nocą',               desc: 'Odkryj coś między północą a 4:00',       value: s => s.nightOwl ? 1 : 0,  goal: 1 },
+    { id: 'early',     name: 'O świcie',           desc: 'Odkryj coś między 5:00 a 7:00',          value: s => s.earlyBird ? 1 : 0, goal: 1 }
   ];
 
   global.ACHIEVEMENTS = A;

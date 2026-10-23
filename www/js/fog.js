@@ -1,4 +1,4 @@
-/* Odkrywca – warstwa mgły rysowana na canvasie nad mapą */
+/* Odkrywca: warstwa mgły rysowana na canvasie nad mapą */
 (function (global) {
   'use strict';
 
@@ -15,7 +15,7 @@
     const blob = (color, count, rMin, rMax, alpha) => {
       for (let n = 0; n < count; n++) {
         const x = rnd() * TEX, y = rnd() * TEX, r = rMin + rnd() * (rMax - rMin);
-        // rysujemy z zawinięciem, by tekstura była bezszwowa
+        // rysujemy z zawinięciem, żeby tekstura była bezszwowa
         for (const ox of [-TEX, 0, TEX]) for (const oy of [-TEX, 0, TEX]) {
           const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
           g.addColorStop(0, hexA(color, alpha * (0.4 + rnd() * 0.6)));
@@ -44,7 +44,6 @@
     initialize(opts) {
       L.setOptions(this, opts);
       this.maxDay = null;
-      this.visible = true;
       this._raf = null;
       this.setTheme(opts.theme);
     },
@@ -54,16 +53,6 @@
       this._texture = makeCloudTexture(theme);
       this._pattern = null;
       this.redraw();
-    },
-
-    setOpacity(o) {
-      this.options.opacity = o;
-      if (this._canvas) this._canvas.style.opacity = this.visible ? o : 0;
-    },
-
-    setVisible(v) {
-      this.visible = v;
-      if (this._canvas) this._canvas.style.opacity = v ? this.options.opacity : 0;
     },
 
     setMaxDay(d) { this.maxDay = d; this.redraw(); },
@@ -105,7 +94,7 @@
     _onZoomAnim(ev) {
       const map = this._map;
       const scale = map.getZoomScale(ev.zoom, this._zoom);
-      // tak jak L.Renderer – przesuwamy i skalujemy płótno podczas animacji
+      // jak w L.Renderer: przesuwamy i skalujemy płótno podczas animacji
       const viewHalf = map.getSize().multiplyBy(0.5 + this.options.padding);
       const currentCenterPoint = map.project(this._center, ev.zoom);
       const topLeft = viewHalf.multiplyBy(-scale).add(currentCenterPoint).subtract(map._getNewPixelOrigin(ev.center, ev.zoom));
@@ -176,7 +165,7 @@
       const center = map.getCenter();
       const zoom = map.getZoom();
       const metersPerPx = 40075016.686 * Math.cos(center.lat * Math.PI / 180) / Math.pow(2, zoom + 8);
-      const radiusM = global.Store.state.settings.radius;
+      const radiusM = global.Store.RADIUS;
       const rPx = radiusM / metersPerPx;
       const r = Math.max(rPx * 0.9, 2.5) * dpr;
       const blur = Math.min(Math.max(rPx * 0.5, 0.8), 60) * dpr;
@@ -186,7 +175,7 @@
       ctx.globalCompositeOperation = 'destination-out';
       ctx.fillStyle = '#000';
       ctx.shadowColor = '#000';
-      ctx.shadowBlur = blur;   // sigma ≈ blur / 2 → miękka, ale czysta krawędź
+      ctx.shadowBlur = blur;   // sigma ≈ blur / 2, miękka, ale czysta krawędź
       ctx.shadowOffsetX = OFF;
       ctx.beginPath();
       let count = 0;

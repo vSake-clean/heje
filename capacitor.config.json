@@ -3,6 +3,6 @@
   "appName": "Odkrywca",
   "webDir": "www",
   "android": {
-    "backgroundColor": "#eef0f8"
+    "backgroundColor": "#e4e2dc"
   }
 }
