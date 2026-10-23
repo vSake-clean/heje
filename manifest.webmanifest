@@ -1,0 +1,15 @@
+{
+  "name": "Odkrywca – odkrywaj prawdziwy świat",
+  "short_name": "Odkrywca",
+  "description": "Mapa świata spowita mgłą, która odsłania się tam, gdzie naprawdę byłeś.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef0f8",
+  "theme_color": "#eef0f8",
+  "lang": "pl",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
