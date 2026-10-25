@@ -39,6 +39,10 @@ import pl.rytm.app.ui.editor.EditorViewModel
 import pl.rytm.app.ui.home.HomeScreen
 import pl.rytm.app.ui.home.HomeViewModel
 import pl.rytm.app.ui.home.LoadingBox
+import pl.rytm.app.ui.importer.ImportInbox
+import pl.rytm.app.ui.importer.ImportRoutineScreen
+import pl.rytm.app.ui.importer.ImportViewModel
+import pl.rytm.app.domain.text.RoutineText
 import pl.rytm.app.ui.onboarding.OnboardingScreen
 import pl.rytm.app.ui.picker.SoundCloudPickerScreen
 import pl.rytm.app.ui.session.SessionScreen
@@ -116,7 +120,11 @@ class MainActivity : ComponentActivity() {
         if (intent == null) return
         if (intent.action == Intent.ACTION_SEND) {
             val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-            if (SoundCloudLinks.extractUrl(text) != null) pendingShare = text
+            when {
+                // Rutyna udostępniona np. z czatu z AI – otwórz ekran „Rutyna z tekstu”.
+                RoutineText.looksLikeRoutine(text) -> ImportInbox.put(text)
+                SoundCloudLinks.extractUrl(text) != null -> pendingShare = text
+            }
         }
         if (intent.getBooleanExtra(EXTRA_OPEN_SESSION, false)) openSessionRequest = true
     }
@@ -182,6 +190,11 @@ private fun AppNavigation(
         }
     }
 
+    val inbox by ImportInbox.text.collectAsStateWithLifecycle()
+    LaunchedEffect(inbox, s.onboardingDone) {
+        if (inbox != null && s.onboardingDone) nav.navigate("import") { launchSingleTop = true }
+    }
+
     NavHost(navController = nav, startDestination = start) {
         composable("onboarding") {
             OnboardingScreen(
@@ -206,6 +219,7 @@ private fun AppNavigation(
                 onOpenSession = { nav.navigate("session") { launchSingleTop = true } },
                 onEdit = { id -> nav.navigate("editor/$id") },
                 onCreate = { nav.navigate("editor/0") },
+                onImport = { nav.navigate("import") },
                 onSettings = { nav.navigate("settings") },
             )
         }
@@ -224,6 +238,15 @@ private fun AppNavigation(
                 onPickedMusicConsumed = { entry.savedStateHandle[KEY_PICKED_MUSIC] = null },
                 onBack = { nav.popBackStack() },
                 onPickMusic = { nav.navigate("picker") },
+            )
+        }
+        composable("import") {
+            val vm: ImportViewModel = viewModel()
+            ImportRoutineScreen(
+                vm = vm,
+                onBack = { nav.popBackStack() },
+                // Po utworzeniu – edytor nowej rutyny (do dopracowania), bez powrotu do ekranu importu.
+                onCreated = { id -> nav.navigate("editor/$id") { popUpTo("import") { inclusive = true } } },
             )
         }
         composable("picker") {

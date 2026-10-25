@@ -84,6 +84,8 @@ import pl.rytm.app.domain.schedule.Severity
 import pl.rytm.app.domain.schedule.TimelineBuilder
 import pl.rytm.app.domain.text.TimeText
 import pl.rytm.app.ui.components.ConfirmDialog
+import pl.rytm.app.ui.components.TextTransfer
+import pl.rytm.app.domain.text.RoutineText
 import pl.rytm.app.ui.components.DurationField
 import pl.rytm.app.ui.components.RadioGroup
 import pl.rytm.app.ui.components.SectionCard
@@ -123,7 +125,14 @@ fun EditorScreen(
                 navigationIcon = {
                     IconButton(onClick = tryExit) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Wstecz") }
                 },
-                actions = { TextButton(onClick = vm::save, enabled = state.loaded) { Text("Zapisz") } },
+                actions = {
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    IconButton(
+                        onClick = { TextTransfer.copy(context, "rutyna jako tekst", RoutineText.format(state.routine)) },
+                        enabled = state.loaded,
+                    ) { Icon(painterResource(R.drawable.ic_copy), contentDescription = "Kopiuj rutynę jako tekst") }
+                    TextButton(onClick = vm::save, enabled = state.loaded) { Text("Zapisz") }
+                },
             )
         },
     ) { padding ->

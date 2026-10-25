@@ -5,7 +5,14 @@ Rytm prowadzi Cię przez codzienne rutyny w czasie rzeczywistym. Gra muzyka z So
 W trybie ścisłym aplikacja nie czeka na potwierdzenia. Jeśli ścielenie łóżka ma trwać 15 sekund, po 15 sekundach od razu usłyszysz kolejne polecenie i możesz odejść od łóżka.
 
 - Bez kont, bez kluczy API, bez serwerów. Wszystko zapisuje się lokalnie na telefonie.
-- Gotowy plik do instalacji: **[`release/Rytm-1.1.0.apk`](release/Rytm-1.1.0.apk)** (Android 8.0 lub nowszy). Instaluje się jako aktualizacja wersji 1.0.0, a Twoje rutyny zostają.
+- Gotowy plik do instalacji: **[`release/Rytm-1.2.0.apk`](release/Rytm-1.2.0.apk)** (Android 8.0 lub nowszy). Instaluje się jako aktualizacja wersji 1.0.0 i 1.1.0, a Twoje rutyny zostają.
+
+## Co nowego w 1.2.0
+
+- **Rutyna z tekstu.** Nową rutynę możesz po prostu napisać: jedna linia na zadanie, np. `- 2 min | Ubierz się | Ubierz się.`. Rytm na bieżąco pokazuje podgląd z godzinami, zapasem czasu i błędami (z numerem linii). Opis w sekcji [Rutyna z tekstu albo od AI](#rutyna-z-tekstu-albo-od-ai).
+- **Gotowe polecenie dla AI.** Nad polem tekstowym jest blok z poleceniem do skopiowania jednym przyciskiem. Wklejasz je do ChatGPT, Gemini czy Claude, dopisujesz swoje wymagania, a AI odpowiada rutyną gotową do wklejenia z powrotem.
+- **Odpowiedź AI prosto do Rytmu.** Możesz udostępnić odpowiedź z aplikacji AI do Rytmu przyciskiem „Udostępnij”. Ekran „Rutyna z tekstu” otworzy się z wklejonym tekstem.
+- **Kopiuj jako tekst.** Każdą rutynę skopiujesz jako tekst (menu ⋮ na liście albo ikona w edytorze). Możesz ją wkleić do AI z prośbą o zmiany albo przesłać komuś.
 
 ## Co nowego w 1.1.0
 
@@ -26,7 +33,7 @@ W trybie ścisłym aplikacja nie czeka na potwierdzenia. Jeśli ścielenie łó�
 
 ## 1. Instalacja (dla użytkownika)
 
-1. Pobierz na telefon plik `release/Rytm-1.1.0.apk`. Na GitHubie otwórz plik i naciśnij **Download raw file**.
+1. Pobierz na telefon plik `release/Rytm-1.2.0.apk`. Na GitHubie otwórz plik i naciśnij **Download raw file**.
 2. Otwórz pobrany plik. Android zapyta o zgodę na instalację z tego źródła (przeglądarki lub menedżera plików). Zezwól i wróć.
 3. Naciśnij **Zainstaluj**. Jeśli pojawi się ostrzeżenie Play Protect, wybierz **Zainstaluj mimo to**. Aplikacja nie pochodzi ze Sklepu Play, dlatego system ostrzega.
 4. Uruchom **Rytm**.
@@ -61,6 +68,39 @@ Na start dostajesz 9 przykładowych rutyn. Czasy są realistyczne (tyle, ile czy
 1. Na ekranie głównym naciśnij **Rozpocznij rutynę**. Możesz też nacisnąć **Start** przy wybranej rutynie.
 2. Gdy chcesz własną muzykę: **Edytuj → Muzyka z SoundCloud → Wybierz z SoundCloud**, wyszukaj utwór lub playlistę i naciśnij **Wybierz**.
 3. Gdy chcesz, żeby rutyna startowała sama rano: w edytorze ustaw **Pobudkę** i **Wyjście**, włącz **Uruchamiaj o godzinie pobudki** i wybierz dni.
+4. Gdy chcesz nową rutynę: przycisk **+** → **W edytorze** (klikanie) albo **Z tekstu / od AI** (opisane niżej).
+
+### Rutyna z tekstu albo od AI
+
+Przycisk **+** na ekranie głównym → **Z tekstu / od AI**. Ekran ma trzy części:
+
+1. **Poproś AI o rutynę (opcjonalnie).** Wpisz krótko, czego potrzebujesz, np. „Wstaję 6:30, wychodzę 7:15, chcę zjeść śniadanie i wziąć prysznic”. Poniżej jest blok z gotowym poleceniem, które od razu zawiera Twój opis. Naciśnij **Kopiuj polecenie** (albo ikonę kopiowania w rogu bloku) i wklej je w ChatGPT, Gemini, Claude lub innym czacie. Możesz też nacisnąć **Wyślij do aplikacji AI**, żeby wybrać aplikację z listy „Udostępnij”. Polecenie mówi AI, jakie czasy są realistyczne, jak krótkie mają być komunikaty i że ma odpowiedzieć samym blokiem w formacie Rytmu.
+2. **Wklej albo wpisz rutynę.** Skopiuj odpowiedź AI i naciśnij **Wklej ze schowka** albo udostępnij ją do Rytmu. Możesz też napisać rutynę sam. **Wstaw przykład** wpisuje gotowy wzór, a **Jak pisać?** pokazuje wszystkie pola.
+3. **Podgląd.** Na bieżąco widać godziny każdego zadania, łączny czas, zapas do wyjścia oraz błędy i ostrzeżenia z numerem linii. **Utwórz rutynę** zapisuje ją i otwiera edytor, gdzie możesz jeszcze wszystko zmienić i wybrać muzykę.
+
+Rytm sam nie łączy się z żadnym AI. Polecenie kopiujesz i wklejasz Ty, więc nie są potrzebne żadne konta ani klucze.
+
+Format (wielkość liter, polskie znaki, pogrubienia `**…**`, numeracja `1.` i tekst przed blokiem kodu albo po nim nie przeszkadzają):
+
+```
+NAZWA: Poranek przed szkołą
+TRYB: ścisły
+POBUDKA: 6:40
+WYJŚCIE: 7:25
+BUDZIK: tak
+DNI: pn-pt
+ZADANIA:
+- 20 s | Wstań | Dzień dobry. Wstań z łóżka. | przerwa 10 s
+- 1 min 30 s | Pościel łóżko | Pościel łóżko. | opcjonalne, min 45 s
+- 4 min | Ubierz się | Ubierz się.
+- 15 min | Śniadanie | Śniadanie. Jedz spokojnie. | opcjonalne, min 10 min
+- 3 min | Plecak | Spakuj plecak. | notatka: Klucze, telefon, portfel.
+```
+
+- Zadanie: `- czas | nazwa | polecenie głosowe | opcje`. Wystarczy też `- 2 min Ubierz się` albo `- Zgaś światło – 30 s`. Gdy nie ma polecenia, głos mówi nazwę.
+- Czas: `15 s`, `2 min`, `2 minuty`, `1 min 30 s`, `1:30`, `1,5 min`, `półtorej minuty`, `kwadrans`, `1 h`.
+- Opcje: `opcjonalne` (można skrócić lub pominąć, gdy brakuje czasu), `min 45 s` (najkrótszy sensowny czas), `przerwa 10 s` (cisza z muzyką przed zadaniem), `notatka: …` (tekst tylko na ekranie).
+- Pozostałe pola (wszystkie opcjonalne): `CEL`, `CZEKANIE` (tryb elastyczny), `CZAS SESJI`, `PO PRZERWANIU: kontynuuj | wstrzymaj | wznów zadanie`, `PODAWAJ CZAS: tak | nie`, `OSTRZEŻENIE: 30 s | nie`, `POWITANIE`, `KONIEC`, `GŁOŚNOŚĆ GŁOSU`, `GŁOŚNOŚĆ MUZYKI`, `MUZYKA: <link SoundCloud>`, `ZAPĘTLAJ: tak | nie`.
 
 ---
 
@@ -190,7 +230,7 @@ Rytm **nie** prosi o dostęp do mikrofonu, kontaktów, lokalizacji ani stanu tel
 
 ## 7. Co zostało przetestowane, a co nie
 
-### Przetestowane automatycznie (123 testy, wszystkie przechodzą)
+### Przetestowane automatycznie (136 testów, wszystkie przechodzą)
 Uruchomienie: `./gradlew testDebugUnitTest`.
 
 | Obszar | Testy |
@@ -213,9 +253,12 @@ Uruchomienie: `./gradlew testDebugUnitTest`.
 | Prywatne playlisty (1.1.0) | kody `s-…` w linkach list i utworów, `?secret_token=`, kod „Osadź”, adresy API, adres osadzenia odczytany z oEmbed, brak fałszywych trafień dla treści publicznych |
 | Przykładowe rutyny (1.1.0) | wszystkie przechodzą walidację bez za długich komunikatów, realistyczne czasy (np. zęby 2–3 min, śniadanie 10–20 min, prysznic 5–10 min), zapas przed wyjściem, dopasowanie 45 → 30 min usuwa tylko prysznic i skraca śniadanie |
 | Aktualizacja z 1.0.0 (1.1.0) | migracja bazy v1 → v2 na prawdziwym schemacie v1 (rutyny, budzik, muzyka i zadania zostają), podmiana tylko niezmienionych przykładów, edytowane i własne rutyny nietknięte |
+| Rutyna z tekstu (1.2.0) | wbudowany przykład bez ostrzeżeń i mieszczący się w oknie; każda z 9 przykładowych rutyn → tekst → rutyna bez strat (czasy, tryby, opcje, komunikaty); typowa odpowiedź AI (tekst przed i po bloku kodu, pogrubienia, numeracja, „półtorej minuty”, „1,5 min”, zapis bez kresek); błędy z dokładnym numerem linii; domyślne wartości; notatki; czasy w wielu formach; godziny i dni tygodnia („od poniedziałku do piątku”, „czasami” to nie czwartek); rozpoznawanie udostępnionego tekstu; zawartość polecenia dla AI |
+| Ekran „Rutyna z tekstu” (1.2.0, Robolectric + Compose) | wpisanie wymagań, blok polecenia z przyciskami, wstawienie przykładu, podgląd „Rutyna jest poprawna”, **Utwórz rutynę** zapisuje w bazie rutynę z 9 zadaniami; zrzuty ekranu renderowane w teście |
 | Android (Robolectric) | baza Room (zapis, edycja, kopiowanie, kaskadowe usuwanie), DataStore, budzik w AlarmManager, **usługa pierwszoplanowa**: typ mediaPlayback, polecenie dokładnie po 10 s, sterowanie widżetem SoundCloud (`load`, `setVolume(75.0)`, `pause`), powiadomienie „Wstrzymano”, sprzątanie po zakończeniu, odtworzenie po zabiciu procesu |
 
 ### Przetestowane ręcznie / półautomatycznie
+- **1.2.0:** wygląd ekranu „Rutyna z tekstu” obejrzany na zrzutach wyrenderowanych w teście Robolectric (ekran 411 dp). To nie jest prawdziwy telefon, ale układ, blok kodu z przyciskiem kopiowania i podgląd z godzinami wyglądają poprawnie.
 - **1.1.0:** odczyt stanu odtwarzacza (`probe`: pauza/gra, pozycja) i wznowienie po wymuszonej pauzie sprawdzone na prawdziwym widżecie. Playlista w formacie adresu osadzenia (`api.soundcloud.com/playlists/…`) gra. Mobilna strona SoundCloud (User-Agent Androida) działa: wyszukiwanie list, strony playlist. Skrypt odczytu linku prywatnego nie daje fałszywych trafień dla list publicznych i poprawnie zwraca link z kodem dla listy prywatnej (symulacja metadanych strony; nie mam prawdziwej prywatnej listy do testu).
 - **Prawdziwy odtwarzacz SoundCloud** z naszego pliku `app/src/main/assets/soundcloud_player.html` w przeglądarce Chromium, z tym samym adresem bazowym co w aplikacji. Sprawdzone: wczytanie bez klucza API, tytuł, wykonawca i okładka utworu, odtwarzanie (rosnąca pozycja), `setVolume(75)` potwierdzone przez `getVolume() = 75`, pauza i wznowienie, zapętlanie po końcu utworu. Skrypty: `tools/soundcloud-widget-check/`.
 - **Kompilacja**: `assembleDebug`, `assembleRelease`, `lint` bez błędów, czysta kompilacja przez `./gradlew`. APK zweryfikowane narzędziem `apksigner`.
@@ -225,7 +268,8 @@ Uruchomienie: `./gradlew testDebugUnitTest`.
 - Prywatna playlista z prawdziwego konta SoundCloud (sprawdzone na danych symulowanych i na formacie linków).
 - Odtwarzanie komunikatów z nagrań przez MediaPlayer na urządzeniu. W testach usługi sprawdzona jest ścieżka zapasowa (mowa bezpośrednia), z której Rytm korzysta, gdy nagranie nie jest gotowe.
 - Rzeczywiste brzmienie polskich głosów różnych producentów oraz zachowanie oszczędzania baterii u konkretnych producentów.
-- Wygląd interfejsu na różnych ekranach. Kod Compose się kompiluje i przechodzi lint, ale nie był oglądany na urządzeniu.
+- Wygląd interfejsu na różnych ekranach. Kod Compose się kompiluje i przechodzi lint, ale nie był oglądany na urządzeniu (poza zrzutami ekranu „Rutyna z tekstu” z Robolectric).
+- Schowek i „Udostępnij” między Rytmem a prawdziwymi aplikacjami ChatGPT, Gemini i Claude. Używane są standardowe mechanizmy Androida, ale nie było ich na czym sprawdzić. Odpowiedzi AI mogą się różnić. Parser jest tolerancyjny, a każdy problem widać w podglądzie przed utworzeniem rutyny.
 
 ---
 
@@ -235,7 +279,7 @@ Wymagania: **Android Studio** (Ladybug 2024.2 lub nowsze) albo JDK 17+ i Android
 
 ```bash
 ./gradlew assembleRelease      # → app/build/outputs/apk/release/app-release.apk
-./gradlew testDebugUnitTest    # 123 testy
+./gradlew testDebugUnitTest    # 136 testów
 ./gradlew lintRelease
 ```
 
@@ -257,7 +301,9 @@ app/src/main/java/pl/rytm/app/
 │   │                     AnnouncementScheduler (komunikaty, brak nakładania),
 │   │                     SessionRunner (pętla czasu rzeczywistego, mowa, przyciszanie, przerwania)
 │   ├── audio/            DuckingController – obwiednia głośności (płynnie, z przytrzymaniem)
-│   ├── speech/ text/     szacowanie długości mowy, polskie liczebniki i odmiana
+│   ├── speech/           szacowanie długości mowy, katalog komunikatów sesji
+│   ├── text/             polskie liczebniki i odmiana, RoutineText (format tekstowy rutyny,
+│   │                     tolerancyjny parser, eksport, polecenie dla AI)
 ├── data/                 Room (rutyny), DataStore (ustawienia), zapis migawki sesji
 ├── service/              RoutineSessionService (usługa pierwszoplanowa mediaPlayback),
 │                         powiadomienia, MediaSession, wykrywanie połączeń, słuchawki
@@ -266,7 +312,8 @@ app/src/main/java/pl/rytm/app/
 ├── speech/               AndroidSpeech (TextToSpeech), ClipSpeechOutput (komunikaty z nagrań, bez fokusu audio)
 ├── alarm/                budzik rutyny (AlarmManager.setAlarmClock), odbiorniki systemowe
 └── ui/                   Jetpack Compose + Material 3 (MVVM): ekran główny, edytor,
-                          wybór muzyki, aktywna sesja, ustawienia, pierwsze uruchomienie
+                          wybór muzyki, aktywna sesja, ustawienia, pierwsze uruchomienie,
+                          rutyna z tekstu / od AI (blok kodu do kopiowania)
 ```
 
 Najważniejsza zasada: **interfejs nie odmierza czasu.** Harmonogram prowadzi usługa. Stan zadania jest zawsze wyliczany z czasu startu sesji (zegar monotoniczny) i z planu przygotowanego przed startem. Dzięki temu wygaszony ekran, opóźnione wywołania czy powrót do aplikacji nie rozregulują rutyny.
@@ -277,4 +324,5 @@ Najważniejsza zasada: **interfejs nie odmierza czasu.** Harmonogram prowadzi us
 
 - Rutyny i ustawienia są tylko na tym telefonie (Room + DataStore). Aplikacja nie ma kont, własnych serwerów ani analityki.
 - Połączenia sieciowe: oficjalny odtwarzacz i strona SoundCloud oraz publiczny endpoint oEmbed (tytuł i okładka).
+- Rytm nie wysyła niczego do usług AI. Polecenie dla AI kopiujesz i wklejasz sam, a rutyna z tekstu jest analizowana lokalnie na telefonie.
 - Hasła do SoundCloud wpisujesz wyłącznie na stronie SoundCloud. Rytm ich nie odczytuje ani nie zapisuje. „Ustawienia → Wyloguj z SoundCloud w Rytmie” usuwa dane logowania przeglądarki wbudowanej.

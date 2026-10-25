@@ -64,6 +64,8 @@ import pl.rytm.app.domain.schedule.TimelineBuilder
 import pl.rytm.app.domain.session.LiveSession
 import pl.rytm.app.domain.text.TimeText
 import pl.rytm.app.ui.components.ConfirmDialog
+import pl.rytm.app.ui.components.TextTransfer
+import pl.rytm.app.domain.text.RoutineText
 import pl.rytm.app.ui.editor.describeChange
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,6 +75,7 @@ fun HomeScreen(
     onOpenSession: () -> Unit,
     onEdit: (Long) -> Unit,
     onCreate: () -> Unit,
+    onImport: () -> Unit,
     onSettings: () -> Unit,
 ) {
     val routines by vm.routines.collectAsStateWithLifecycle()
@@ -81,6 +84,7 @@ fun HomeScreen(
     val dialog by vm.dialog.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val startError by vm.startError.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Scaffold(
         topBar = {
@@ -92,11 +96,32 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onCreate,
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Nowa rutyna") },
-            )
+            var createMenu by remember { mutableStateOf(false) }
+            Box {
+                ExtendedFloatingActionButton(
+                    onClick = { createMenu = true },
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text("Nowa rutyna") },
+                )
+                DropdownMenu(expanded = createMenu, onDismissRequest = { createMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("W edytorze") },
+                        leadingIcon = { Icon(Icons.Default.Edit, null) },
+                        onClick = {
+                            createMenu = false
+                            onCreate()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Z tekstu / od AI") },
+                        leadingIcon = { Icon(painterResource(R.drawable.ic_copy), null) },
+                        onClick = {
+                            createMenu = false
+                            onImport()
+                        },
+                    )
+                }
+            }
         },
     ) { padding ->
         LazyColumn(
@@ -138,6 +163,7 @@ fun HomeScreen(
                     onStart = { vm.requestStart(routine, onOpenSession) },
                     onEdit = { onEdit(routine.id) },
                     onDuplicate = { vm.duplicate(routine) },
+                    onCopyText = { TextTransfer.copy(context, "rutyna jako tekst", RoutineText.format(routine)) },
                     onDelete = { vm.askDelete(routine) },
                     onAlarm = { vm.setAlarm(routine, it) },
                 )
@@ -278,6 +304,7 @@ private fun RoutineCard(
     onStart: () -> Unit,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
+    onCopyText: () -> Unit,
     onDelete: () -> Unit,
     onAlarm: (Boolean) -> Unit,
 ) {
@@ -315,6 +342,11 @@ private fun RoutineCard(
                             text = { Text("Duplikuj (wariant)") },
                             leadingIcon = { Icon(painterResource(R.drawable.ic_copy), null) },
                             onClick = { menu = false; onDuplicate() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Kopiuj jako tekst (np. dla AI)") },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_copy), null) },
+                            onClick = { menu = false; onCopyText() },
                         )
                         DropdownMenuItem(
                             text = { Text("Usuń") },
