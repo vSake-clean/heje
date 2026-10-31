@@ -1,71 +1,95 @@
-# 🛡️ HackLingo — kurs bezpieczeństwa webowego w stylu Duolingo
+# 🛡️ HackLingo — kurs bezpieczeństwa webowego (aplikacja na Androida)
 
-Interaktywna aplikacja (telefon + komputer) do nauki **bezpieczeństwa aplikacji
-webowych**. Działa jak Duolingo: ścieżka lekcji, XP, serie dni, serca, odznaki —
-ale zamiast języków uczysz się, **jak działają podatności i jak je naprawiać**.
+Aplikacja mobilna (Android **APK/AAB**) do nauki **bezpieczeństwa aplikacji
+webowych** w stylu Duolingo: ścieżka poziomów, XP, **passa (seria dni)**, serca,
+odznaki — ale zamiast języków uczysz się, **jak działają podatności i jak je
+naprawiać**.
 
-Każde laboratorium jest w **100% symulowane w przeglądarce**. Aplikacja niczego
-nie atakuje w prawdziwym świecie, nie wysyła żadnych danych i działa offline.
+Wszystkie laboratoria są w **100% symulowane** wewnątrz aplikacji. Nic nie jest
+wysyłane do sieci, nic nie atakuje prawdziwych systemów, aplikacja **działa w
+pełni offline** (nie wymaga nawet uprawnienia INTERNET).
 
-## ✨ Co w środku
+## 📦 Zawartość (dużo poziomów)
 
-- **Ścieżka nauki** z modułami:
-  - 🌐 Podstawy sieci + etyka (triada CIA)
-  - 🗄️ SQL Injection (obejście logowania, wyciek danych UNION)
-  - 💬 Cross-Site Scripting (XSS)
-  - 🔑 Słabe uwierzytelnianie (atak słownikowy / brute-force)
+- **56 poziomów** w **14 modułach**, **82 pytania** i **8 interaktywnych laboratoriów**:
+  - 🌐 Podstawy sieci + etyka (CIA)
+  - 🔎 Rozpoznanie (recon)
+  - 🗄️ SQL Injection (logowanie, UNION, blind, obrona)
+  - 💬 Cross-Site Scripting (typy, CSP, obrona)
+  - 🔑 Uwierzytelnianie (brute-force, sesje, JWT, 2FA)
   - 🪪 IDOR / kontrola dostępu
   - 💻 Command Injection
-  - 📁 Path Traversal
-  - 🏴 Egzamin końcowy („Czerwona drużyna”)
-- **Interaktywne laboratoria** — symulowany panel logowania, księga gości,
-  narzędzie ping, podgląd plików itd. Próbujesz różnych payloadów i widzisz efekt.
+  - 📁 Path Traversal / LFI
+  - 🎭 CSRF · 🕳️ SSRF · 📤 Upload plików
+  - 🔐 Kryptografia i nagłówki bezpieczeństwa
+  - 🧰 Metodyka (OWASP Top 10, proxy, responsible disclosure)
+  - 🏴 Dwa egzaminy końcowe
 - **Przycisk „💡 Podpowiedź”** — progresywne wskazówki, które delikatnie
-  naprowadzają, **w którym kierunku iść**, a nie od razu dają rozwiązanie.
-- **Obrona przy każdej lekcji** — po wykorzystaniu podatności dowiadujesz się,
-  jak ją naprawić (prepared statements, output encoding, autoryzacja itd.).
-- **Grywalizacja** — XP, poziomy, seria dni 🔥, serca ❤️, tryb Treningu, odznaki 🏆.
-- **Słownik** pojęć (atak + obrona).
-- **PWA** — można zainstalować na telefonie i używać bez internetu.
+  naprowadzają, *w którym kierunku iść*, a dopiero na końcu podają rozwiązanie.
+- **Sekcja „obrona”** przy każdym laboratorium — jak podatność naprawić.
+- **Grywalizacja**: XP, poziomy, passa 🔥, serca ❤️, tryb Treningu, odznaki 🏆.
+- **Słownik** pojęć, profil, zapis postępu lokalnie (localStorage).
 
-## ▶️ Jak uruchomić
+## 📱 Instalacja APK na telefonie
 
-To statyczna strona — nie wymaga instalacji ani serwera backendowego.
+1. Skopiuj plik `HackLingo-1.0.0.apk` na telefon (lub pobierz).
+2. Otwórz go — Android poprosi o zgodę na „instalację z nieznanych źródeł”
+   (to normalne przy instalacji poza sklepem). Zezwól dla tej aplikacji.
+3. Zainstaluj i uruchom „HackLingo”.
 
-**Najprościej:** otwórz plik `index.html` w przeglądarce.
+> Minimalna wersja Androida: **8.0 (API 26)**. Aplikacja jest podpisana.
 
-**Zalecane (żeby działał service worker / PWA)** — uruchom lokalny serwer:
+## 🏗️ Budowanie ze źródeł
 
-```bash
-# Python 3
-python3 -m http.server 8000
-# następnie otwórz:  http://localhost:8000
-```
-
-lub:
+Wymagania: JDK 17+, Android SDK (platform android-34, build-tools 34.0.0).
 
 ```bash
-npx serve .
+cd android
+./sync-web.sh                 # skopiuj treść web do assets/ (po zmianach w kursie)
+./gradlew assembleDebug       # APK debug  -> app/build/outputs/apk/debug/
+./gradlew assembleRelease     # APK release (podpisany, jeśli jest keystore.properties)
+./gradlew bundleRelease       # AAB do Google Play
 ```
 
-### Instalacja na telefonie
-Otwórz adres w Chrome/Safari na telefonie → menu → **„Dodaj do ekranu
-głównego”**. Aplikacja zadziała jak natywna, również offline.
+### Podpisywanie release
+Build release podpisuje się automatycznie, jeśli w katalogu `android/` znajduje
+się plik `keystore.properties` (niecommitowany) wskazujący Twój keystore:
+
+```properties
+storeFile=moj-klucz.keystore
+storePassword=...
+keyAlias=...
+keyPassword=...
+```
+
+Klucz tworzysz raz:
+```bash
+keytool -genkeypair -v -keystore moj-klucz.keystore -alias hacklingo \
+  -keyalg RSA -keysize 2048 -validity 10000
+```
+Bez tego pliku build release powstanie niepodpisany (do podpisania później).
+
+## 🏬 Publikacja w sklepach
+
+- **Google Play** — wgraj `HackLingo-1.0.0.aab` w Google Play Console (zalecany
+  jest mechanizm Play App Signing; wtedy Twój klucz służy jako upload key).
+  Trzeba podać m.in. politykę prywatności i ikony/zrzuty — aplikacja nie zbiera
+  danych i działa offline, co upraszcza formularz.
+- **Apple App Store (iOS)** — wymaga komputera **Mac z Xcode** oraz konta Apple
+  Developer; nie da się tego zbudować w tym (linuksowym) środowisku. Tę samą
+  aplikację webową można opakować pod iOS (np. Capacitor / WKWebView) na macu.
 
 ## 🗂️ Struktura
 
 ```
-index.html              # szkielet + zakładki
-css/styles.css          # wygląd (jasny/ciemny, responsywny)
-js/data.js              # treść kursu, słownik, odznaki
-js/labs.js              # symulowane laboratoria podatności
-js/app.js               # silnik: widoki, postęp, grywalizacja
-manifest.webmanifest    # PWA
-sw.js                   # tryb offline
-icon.svg                # ikona
+index.html, css/, js/        # aplikacja webowa (źródło treści kursu)
+  js/data.js                 # 56 poziomów, słownik, odznaki
+  js/labs.js                 # symulowane laboratoria podatności
+  js/app.js                  # silnik: widoki, postęp, grywalizacja
+android/                     # natywny projekt Androida (WebView, offline)
+  app/src/main/assets/www/   # kopia aplikacji webowej pakowana do APK
+  sync-web.sh                # synchronizacja web -> assets
 ```
-
-Postęp zapisywany jest lokalnie w `localStorage` (nic nie opuszcza urządzenia).
 
 ## ⚖️ Nota etyczna
 

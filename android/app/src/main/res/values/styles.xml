@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.HackLingo" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/white</item>
+        <item name="android:statusBarColor">@color/brandGreen</item>
+        <item name="android:navigationBarColor">@color/white</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Ekran startowy (splash) widoczny podczas uruchamiania aplikacji. -->
+    <style name="Theme.HackLingo.Splash" parent="Theme.HackLingo">
+        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:statusBarColor">@color/brandDark</item>
+        <item name="android:navigationBarColor">@color/brandDark</item>
+    </style>
+</resources>

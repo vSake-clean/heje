@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- tarcza (shield) -->
+    <path
+        android:fillColor="#58CC02"
+        android:strokeColor="#46A302"
+        android:strokeWidth="2"
+        android:pathData="M54,18 L86,31 L86,57 C86,80 71,92 54,98 C37,92 22,80 22,57 L22,31 Z" />
+    <!-- znak &gt; (chevron) -->
+    <path
+        android:strokeColor="#131F24"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M44,45 L57,55 L44,65" />
+    <!-- podkreślenie _ -->
+    <path
+        android:strokeColor="#131F24"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:pathData="M60,66 L72,66" />
+</vector>

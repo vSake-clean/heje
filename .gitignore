@@ -1,0 +1,5 @@
+# Artefakty buildu (dostarczane użytkownikowi, nie commitowane)
+*.apk
+*.aab
+# Narzędzia / katalogi robocze
+node_modules/

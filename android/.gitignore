@@ -1,0 +1,15 @@
+# Gradle / build
+.gradle/
+build/
+app/build/
+local.properties
+
+# Podpis release (NIE commitować haseł ani klucza)
+keystore.properties
+*.keystore
+*.jks
+
+# IDE
+.idea/
+*.iml
+captures/
