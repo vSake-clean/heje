@@ -1,0 +1,15 @@
+{
+  "name": "HackLingo – Kurs bezpieczeństwa webowego",
+  "short_name": "HackLingo",
+  "description": "Bezpieczny, interaktywny kurs cyberbezpieczeństwa webowego w stylu Duolingo. Laboratoria podatności symulowane w przeglądarce.",
+  "lang": "pl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#131f24",
+  "theme_color": "#58cc02",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
