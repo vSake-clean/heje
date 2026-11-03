@@ -1,0 +1,47 @@
+name: build eszkola
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "eszkola.py"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: install pyinstaller
+        run: pip install pyinstaller
+
+      - name: build exe
+        run: |
+          pyinstaller --onefile --noconsole --name eszkola eszkola.py
+          ls dist
+
+      - name: commit exe back to repo
+        shell: pwsh
+        run: |
+          Copy-Item dist\eszkola.exe -Destination eszkola.exe -Force
+          git config user.name "vSake-clean"
+          git config user.email "vsake-clean@users.noreply.github.com"
+          git add eszkola.exe
+          git commit -m "build eszkola.exe from $env:GITHUB_SHA" || echo "nothing to commit"
+          git push
+
+      - name: publish release with exe
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: eszkola-v${{ github.run_number }}
+          name: eszkola build ${{ github.run_number }}
+          files: dist/eszkola.exe
+          overwrite_files: true
