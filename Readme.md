@@ -41,7 +41,9 @@ i zwykle płynniej.
    `%LOCALAPPDATA%\EkranTelefonu`). Możesz też położyć `adb.exe` obok programu albo mieć Android SDK.
 5. Na telefonie potwierdź **„Zezwolić na debugowanie USB?”** (zaznacz „Zawsze zezwalaj”).
 
-Program sam wybiera kabel lub Wi‑Fi – co znajdzie pierwsze. Aby używać tylko kabla: `EkranTelefonu.exe usb`.
+Program sam przełącza się między kablem a Wi‑Fi: gdy podłączysz kabel w trakcie oglądania przez Wi‑Fi,
+przechodzi na kabel (po ok. 2 s), a gdy kabel odłączysz – wraca na Wi‑Fi. Aplikacji na telefonie nie trzeba
+restartować. Aby używać tylko kabla: `EkranTelefonu.exe usb`.
 
 ## Sterowanie telefonem z komputera
 

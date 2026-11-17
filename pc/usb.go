@@ -197,6 +197,31 @@ func watchUSB(done <-chan struct{}, report func(addr, name string), showHint fun
 	}
 }
 
+// watchUSBGone co 2 sekundy sprawdza, czy telefon nadal jest na kablu, i wywołuje
+// gone, gdy zniknie (odłączony kabel, wyłączone debugowanie).
+func watchUSBGone(done <-chan struct{}, gone func()) {
+	misses := 0
+	for {
+		select {
+		case <-done:
+			return
+		case <-time.After(2 * time.Second):
+		}
+		adb := findAdb()
+		if adb != "" {
+			if _, st := usbDevice(adb); st == usbReady {
+				misses = 0
+				continue
+			}
+		}
+		// Dwa razy z rzędu, żeby chwilowa czkawka adb nie przerywała obrazu.
+		if misses++; misses >= 2 {
+			gone()
+			return
+		}
+	}
+}
+
 // downloadAdb pobiera oficjalne Android Platform Tools od Google i rozpakowuje
 // je do toolsDir(). Zwraca ścieżkę do adb.
 func downloadAdb() (string, error) {

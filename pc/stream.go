@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -342,19 +343,28 @@ func toBGRA(img image.Image, out []byte) {
 }
 
 // run to główna pętla: znajdź telefon (lub użyj podanego adresu), oglądaj, po rozłączeniu ponów.
+// W trybie automatycznym w trakcie oglądania pilnuje kabla: gdy telefon pojawi się
+// na USB, przełącza się na kabel, a gdy kabel zniknie – wraca na Wi-Fi.
 func run(manual string, v viewer) {
+	usbOnly := strings.EqualFold(manual, "usb")
+	auto := manual == "" // tylko wtedy przełączamy się sami
+	var next [2]string   // adres i nazwa, na które przełączamy się od razu
 	for {
-		addr, name := manual, ""
-		if addr == "" || strings.EqualFold(addr, "usb") {
+		addr, name := next[0], next[1]
+		next = [2]string{}
+		if addr == "" {
+			addr = manual
+		}
+		if addr == "" || usbOnly {
 			base := "Szukam telefonu (Wi-Fi, hotspot lub kabel USB)... " +
 				"Uruchom aplikację na telefonie i naciśnij Start."
-			if addr != "" {
+			if usbOnly {
 				base = "Szukam telefonu podłączonego kablem USB... " +
 					"Uruchom aplikację na telefonie i naciśnij Start."
 			}
 			v.setStatus(base)
 			var lastHint string
-			addr, name = discover(addr != "", func(h string) {
+			addr, name = discover(usbOnly, func(h string) {
 				if h == lastHint {
 					return
 				}
@@ -371,10 +381,43 @@ func run(manual string, v viewer) {
 		if name == "" {
 			name = addr
 		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		onUSB := strings.HasPrefix(name, "USB:")
+		switched := make(chan [2]string, 1)
+		var cableGone atomic.Bool
+		if auto && !onUSB {
+			// Oglądamy przez Wi-Fi – sprawdzaj, czy nie podłączono kabla.
+			go watchUSB(ctx.Done(), func(a, n string) {
+				switched <- [2]string{a, n}
+				cancel()
+			}, func(string) {})
+		}
+		if auto && onUSB {
+			// Oglądamy przez kabel – gdy go odłączysz, wracamy na Wi-Fi.
+			go watchUSBGone(ctx.Done(), func() {
+				cableGone.Store(true)
+				cancel()
+			})
+		}
+
 		v.setStatus("Łączenie z " + name + " (" + addr + ")...")
 		v.setControlTarget(addr)
-		err := stream(context.Background(), addr, &titled{viewer: v, name: name})
+		err := stream(ctx, addr, &titled{viewer: v, name: name})
+		cancel()
 		v.setControlTarget("")
+
+		select {
+		case sw := <-switched:
+			v.setStatus("Wykryto kabel USB – przełączam na kabel...")
+			next = sw
+			continue
+		default:
+		}
+		if cableGone.Load() {
+			v.setStatus("Kabel USB odłączony – wracam na Wi-Fi...")
+			continue
+		}
 		v.setStatus("Rozłączono (" + err.Error() + "). Ponawiam...")
 		time.Sleep(2 * time.Second)
 	}
