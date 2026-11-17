@@ -1,17 +1,20 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/jpeg"
 	"io"
 	"mime"
-	"mime/multipart"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,7 +42,10 @@ type viewer interface {
 //     Windows blokuje ruch przychodzący, np. w sieci z hotspotu telefonu).
 //
 // Zwraca adres "ip:port" serwera strumienia oraz nazwę telefonu.
-func discover() (addr, name string) {
+//   - kabel USB z debugowaniem (adb forward), gdy na komputerze jest ADB.
+//
+// usbOnly ogranicza szukanie do kabla. hint dostaje podpowiedzi dotyczące USB.
+func discover(usbOnly bool, hint func(string)) (addr, name string) {
 	found := make(chan [2]string, 1)
 	done := make(chan struct{})
 	defer close(done)
@@ -48,6 +54,12 @@ func discover() (addr, name string) {
 		case found <- [2]string{a, n}:
 		default:
 		}
+	}
+
+	go watchUSB(done, report, hint)
+	if usbOnly {
+		r := <-found
+		return r[0], r[1]
 	}
 
 	if conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: discoveryPort}); err == nil {
@@ -209,31 +221,123 @@ func stream(ctx context.Context, addr string, v viewer) error {
 	if err != nil || params["boundary"] == "" {
 		return errors.New("nieprawidłowa odpowiedź telefonu")
 	}
-	mr := multipart.NewReader(resp.Body, params["boundary"])
-	var rgba *image.RGBA
+	br := bufio.NewReaderSize(resp.Body, 256*1024)
+
+	// Czytanie i dekodowanie idą osobno: czytnik odbiera klatki tak szybko, jak
+	// przychodzą, i zostawia tylko najnowszą. Gdy komputer nie nadąża z
+	// dekodowaniem, stare klatki są pomijane, więc obraz nie zostaje w tyle.
+	latest := make(chan []byte, 1)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var bufs [3][]byte
+		n := 0
+		for data := range latest {
+			img, err := jpeg.Decode(bytes.NewReader(data))
+			if err != nil {
+				continue
+			}
+			b := img.Bounds()
+			buf := &bufs[n%len(bufs)]
+			n++
+			if need := b.Dx() * b.Dy() * 4; cap(*buf) < need {
+				*buf = make([]byte, need)
+			} else {
+				*buf = (*buf)[:need]
+			}
+			toBGRA(img, *buf)
+			v.setFrame(*buf, b.Dx(), b.Dy())
+		}
+	}()
+	defer func() {
+		close(latest)
+		<-done
+	}()
+
 	for {
-		part, err := mr.NextPart()
+		data, err := readFrame(br)
 		if err != nil {
 			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 				return errors.New("telefon zakończył udostępnianie")
 			}
 			return err
 		}
-		img, err := jpeg.Decode(part)
-		part.Close()
+		select {
+		case latest <- data:
+		default:
+			select { // dekoder zajęty – podmień czekającą klatkę na nowszą
+			case <-latest:
+			default:
+			}
+			latest <- data
+		}
+	}
+}
+
+// readFrame czyta jedną klatkę strumienia MJPEG: linię granicy "--frame",
+// nagłówki i dokładnie Content-Length bajtów JPEG. Klatka jest gotowa od razu
+// po odebraniu – nie czekamy na początek następnej (jak robi to multipart.Reader),
+// więc ostatnia zmiana na ekranie telefonu pojawia się bez opóźnienia.
+func readFrame(br *bufio.Reader) ([]byte, error) {
+	// Granica (pomijamy ewentualne puste linie po poprzedniej klatce).
+	for {
+		line, err := br.ReadString('\n')
 		if err != nil {
-			continue
+			return nil, err
 		}
-		b := img.Bounds()
-		if rgba == nil || rgba.Bounds().Dx() != b.Dx() || rgba.Bounds().Dy() != b.Dy() {
-			rgba = image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+		if strings.HasPrefix(line, "--") {
+			break
 		}
-		draw.Draw(rgba, rgba.Bounds(), img, b.Min, draw.Src)
-		out := make([]byte, len(rgba.Pix))
-		for i := 0; i+3 < len(out); i += 4 {
-			out[i], out[i+1], out[i+2], out[i+3] = rgba.Pix[i+2], rgba.Pix[i+1], rgba.Pix[i], 255
+	}
+	length := -1
+	for {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			return nil, err
 		}
-		v.setFrame(out, b.Dx(), b.Dy())
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			break
+		}
+		if k, v, ok := strings.Cut(line, ":"); ok && strings.EqualFold(strings.TrimSpace(k), "Content-Length") {
+			n, err := strconv.Atoi(strings.TrimSpace(v))
+			if err != nil || n < 0 || n > 32<<20 {
+				return nil, errors.New("nieprawidłowa długość klatki")
+			}
+			length = n
+		}
+	}
+	if length < 0 {
+		return nil, errors.New("klatka bez długości")
+	}
+	data := make([]byte, length)
+	if _, err := io.ReadFull(br, data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// toBGRA zamienia zdekodowany obraz na piksele BGRA dla Windows (jednym przebiegiem).
+func toBGRA(img image.Image, out []byte) {
+	b := img.Bounds()
+	w := b.Dx()
+	if yc, ok := img.(*image.YCbCr); ok {
+		i := 0
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			for x := b.Min.X; x < b.Min.X+w; x++ {
+				yi := yc.YOffset(x, y)
+				ci := yc.COffset(x, y)
+				r, g, bl := color.YCbCrToRGB(yc.Y[yi], yc.Cb[ci], yc.Cr[ci])
+				out[i], out[i+1], out[i+2], out[i+3] = bl, g, r, 255
+				i += 4
+			}
+		}
+		return
+	}
+	rgba := image.NewRGBA(image.Rect(0, 0, w, b.Dy()))
+	draw.Draw(rgba, rgba.Bounds(), img, b.Min, draw.Src)
+	for i := 0; i+3 < len(out); i += 4 {
+		out[i], out[i+1], out[i+2], out[i+3] = rgba.Pix[i+2], rgba.Pix[i+1], rgba.Pix[i], 255
 	}
 }
 
@@ -241,9 +345,26 @@ func stream(ctx context.Context, addr string, v viewer) error {
 func run(manual string, v viewer) {
 	for {
 		addr, name := manual, ""
-		if addr == "" {
-			v.setStatus("Szukam telefonu w sieci... Uruchom aplikację na telefonie i naciśnij Start.")
-			addr, name = discover()
+		if addr == "" || strings.EqualFold(addr, "usb") {
+			base := "Szukam telefonu (Wi-Fi, hotspot lub kabel USB)... " +
+				"Uruchom aplikację na telefonie i naciśnij Start."
+			if addr != "" {
+				base = "Szukam telefonu podłączonego kablem USB... " +
+					"Uruchom aplikację na telefonie i naciśnij Start."
+			}
+			v.setStatus(base)
+			var lastHint string
+			addr, name = discover(addr != "", func(h string) {
+				if h == lastHint {
+					return
+				}
+				lastHint = h
+				if h == "" {
+					v.setStatus(base)
+				} else {
+					v.setStatus(base + "\n\n" + h)
+				}
+			})
 		} else if _, _, err := net.SplitHostPort(addr); err != nil {
 			addr = net.JoinHostPort(addr, defaultPort)
 		}

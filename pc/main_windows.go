@@ -81,6 +81,7 @@ const (
 	vkEscape = 0x1B
 	vkF1     = 0x70
 	vkF2     = 0x71
+	vkF5     = 0x74
 
 	wsOverlappedWindow = 0x00CF0000
 	cwUseDefault       = 0x80000000
@@ -177,19 +178,18 @@ type window struct {
 	// (piksele okna). Służy do przeliczania kliknięć na współrzędne telefonu.
 	imgDX, imgDY, imgDW, imgDH int
 
-	ctrlAddr string // adres telefonu dla poleceń sterujących ("" = brak)
-	warned   bool   // czy pokazano już podpowiedź o włączeniu sterowania
+	ctrl   *controller // stałe połączenie sterujące z telefonem
+	warned bool        // czy pokazano już podpowiedź o włączeniu sterowania
 
 	// Stan gestu myszy.
-	pressX, pressY float64   // początek przeciągnięcia (0..1)
-	pressTime      time.Time // moment wciśnięcia lewego przycisku
-	dragging       bool
+	dragging bool
+	lastMove time.Time // kiedy wysłano ostatni ruch (ograniczamy do ~80 na sekundę)
 }
 
 func (v *window) setControlTarget(addr string) {
-	v.mu.Lock()
-	v.ctrlAddr = addr
-	v.mu.Unlock()
+	if v.ctrl != nil {
+		v.ctrl.setAddr(addr)
+	}
 }
 
 func (v *window) setStatus(s string) {
@@ -244,16 +244,10 @@ func (v *window) paint() {
 		return
 	}
 
-	// Rysujemy do bufora w pamięci, żeby obraz nie migotał.
-	mdc, _, _ := pCreateCompatibleDC.Call(hdc)
-	bmp, _, _ := pCreateCompatibleBitmap.Call(hdc, uintptr(cw), uintptr(ch))
-	old, _, _ := pSelectObject.Call(mdc, bmp)
-	brush, _, _ := pGetStockObject.Call(blackBrush)
-	pFillRect.Call(mdc, uintptr(unsafe.Pointer(&rc)), brush)
-
 	v.mu.Lock()
 	pix, w, h, status := v.pix, v.w, v.h, v.status
 	v.mu.Unlock()
+	brush, _, _ := pGetStockObject.Call(blackBrush)
 
 	if pix != nil {
 		dw, dh := cw, cw*h/w
@@ -264,27 +258,46 @@ func (v *window) paint() {
 		v.mu.Lock()
 		v.imgDX, v.imgDY, v.imgDW, v.imgDH = dx, dy, dw, dh
 		v.mu.Unlock()
+
+		// Czarne pasy wokół obrazu, a sam obraz rysujemy wprost na ekran –
+		// bez kasowania tła, więc nic nie migocze i nie ma dodatkowej kopii.
+		bars := []rect{
+			{0, 0, int32(cw), int32(dy)},
+			{0, int32(dy + dh), int32(cw), int32(ch)},
+			{0, int32(dy), int32(dx), int32(dy + dh)},
+			{int32(dx + dw), int32(dy), int32(cw), int32(dy + dh)},
+		}
+		for i := range bars {
+			if bars[i].right > bars[i].left && bars[i].bottom > bars[i].top {
+				pFillRect.Call(hdc, uintptr(unsafe.Pointer(&bars[i])), brush)
+			}
+		}
 		bi := bitmapInfo{header: bitmapInfoHeader{
 			biWidth: int32(w), biHeight: -int32(h), biPlanes: 1, biBitCount: 32,
 		}}
 		bi.header.biSize = uint32(unsafe.Sizeof(bi.header))
-		pSetStretchBltMode.Call(mdc, halftone)
-		pSetBrushOrgEx.Call(mdc, 0, 0, 0)
-		pStretchDIBits.Call(mdc, uintptr(dx), uintptr(dy), uintptr(dw), uintptr(dh),
+		pSetStretchBltMode.Call(hdc, halftone)
+		pSetBrushOrgEx.Call(hdc, 0, 0, 0)
+		pStretchDIBits.Call(hdc, uintptr(dx), uintptr(dy), uintptr(dw), uintptr(dh),
 			0, 0, uintptr(w), uintptr(h),
 			uintptr(unsafe.Pointer(&pix[0])), uintptr(unsafe.Pointer(&bi)), 0, srcCopy)
-	} else {
-		text := utf16(status)
-		pSelectObject.Call(mdc, v.font)
-		pSetTextColor.Call(mdc, 0x00FFFFFF)
-		pSetBkMode.Call(mdc, transparent)
-		tr := rect{20, 0, int32(cw - 20), int32(ch)}
-		pDrawTextW.Call(mdc, uintptr(unsafe.Pointer(text)), ^uintptr(0), uintptr(unsafe.Pointer(&tr)), dtCenter|dtWordBreak|dtCalcRect)
-		textH := tr.bottom - tr.top
-		tr = rect{20, (int32(ch) - textH) / 2, int32(cw - 20), int32(ch)}
-		pDrawTextW.Call(mdc, uintptr(unsafe.Pointer(text)), ^uintptr(0), uintptr(unsafe.Pointer(&tr)), dtCenter|dtWordBreak)
+		return
 	}
 
+	// Brak obrazu: komunikat na czarnym tle (tu bufor w pamięci, żeby tekst nie migotał).
+	mdc, _, _ := pCreateCompatibleDC.Call(hdc)
+	bmp, _, _ := pCreateCompatibleBitmap.Call(hdc, uintptr(cw), uintptr(ch))
+	old, _, _ := pSelectObject.Call(mdc, bmp)
+	pFillRect.Call(mdc, uintptr(unsafe.Pointer(&rc)), brush)
+	text := utf16(status)
+	pSelectObject.Call(mdc, v.font)
+	pSetTextColor.Call(mdc, 0x00FFFFFF)
+	pSetBkMode.Call(mdc, transparent)
+	tr := rect{20, 0, int32(cw - 20), int32(ch)}
+	pDrawTextW.Call(mdc, uintptr(unsafe.Pointer(text)), ^uintptr(0), uintptr(unsafe.Pointer(&tr)), dtCenter|dtWordBreak|dtCalcRect)
+	textH := tr.bottom - tr.top
+	tr = rect{20, (int32(ch) - textH) / 2, int32(cw - 20), int32(ch)}
+	pDrawTextW.Call(mdc, uintptr(unsafe.Pointer(text)), ^uintptr(0), uintptr(unsafe.Pointer(&tr)), dtCenter|dtWordBreak)
 	pBitBlt.Call(hdc, 0, 0, uintptr(cw), uintptr(ch), mdc, 0, 0, srcCopy)
 	pSelectObject.Call(mdc, old)
 	pDeleteObject.Call(bmp)
@@ -300,6 +313,7 @@ func main() {
 	pSetProcessDPIAware.Call()
 
 	v := &window{status: "Uruchamianie..."}
+	v.ctrl = newController(v.onControlAccess)
 	v.font, _, _ = pCreateFontW.Call(28, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 5, 0, uintptr(unsafe.Pointer(utf16("Segoe UI"))))
 
 	hInst, _, _ := pGetModuleHandleW.Call(0)
@@ -349,6 +363,8 @@ func main() {
 				v.sendKey("home")
 			case vkF2:
 				v.sendKey("recents")
+			case vkF5:
+				startAdbDownload(v.setStatus)
 			case vkBack:
 				v.sendControl("a=del")
 			}

@@ -103,7 +103,12 @@ public class MainActivity extends Activity {
     private void start() {
         MediaProjectionManager mpm =
                 (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-        startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE);
+        // Android 14+: od razu "cały ekran", żeby obraz nie znikał po przejściu do innej aplikacji.
+        Intent i = Build.VERSION.SDK_INT >= 34
+                ? mpm.createScreenCaptureIntent(
+                        android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay())
+                : mpm.createScreenCaptureIntent();
+        startActivityForResult(i, REQ_CAPTURE);
     }
 
     @Override
@@ -140,7 +145,9 @@ public class MainActivity extends Activity {
             sb.append("Udostępnianie ekranu WŁĄCZONE.\n\n")
               .append("Uruchom EkranTelefonu.exe na komputerze podłączonym do tej samej sieci Wi-Fi ")
               .append("lub do hotspotu tego telefonu - ")
-              .append("obraz pojawi się automatycznie.\n\n");
+              .append("obraz pojawi się automatycznie. Możesz też podłączyć telefon kablem USB ")
+              .append("(z włączonym debugowaniem USB) - wtedy działa szybciej i bez Wi-Fi.\n\n")
+              .append("Możesz teraz wyjść z aplikacji i normalnie korzystać z telefonu.\n\n");
             List<String> ips = ScreenService.localAddresses();
             if (ips.isEmpty()) {
                 sb.append("Brak połączenia z siecią!");

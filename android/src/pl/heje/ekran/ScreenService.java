@@ -62,9 +62,9 @@ public class ScreenService extends Service {
     static final String ACTION_STOP = "pl.heje.ekran.STOP";
 
     private static final String CHANNEL = "ekran";
-    private static final int MAX_SIDE = 1280;
-    private static final int JPEG_QUALITY = 60;
-    private static final long FRAME_MS_ACTIVE = 50;   // ~20 kl./s gdy ktoś ogląda
+    private static final int MAX_SIDE = 1152;
+    private static final int JPEG_QUALITY = 55;
+    private static final long FRAME_MS_ACTIVE = 33;   // ~30 kl./s gdy ktoś ogląda
     private static final long FRAME_MS_IDLE = 1000;   // 1 kl./s gdy nikt nie ogląda
     private static final Charset LATIN1 = Charset.forName("ISO-8859-1");
 
@@ -218,8 +218,10 @@ public class ScreenService extends Service {
     /** Ustala docelowy rozmiar obrazu i tworzy ImageReader. Zwraca false, gdy rozmiar się nie zmienił. */
     private boolean createReader(DisplayMetrics m) {
         float scale = Math.min(1f, (float) MAX_SIDE / Math.max(m.widthPixels, m.heightPixels));
-        int w = Math.round(m.widthPixels * scale) & ~1;
-        int h = Math.round(m.heightPixels * scale) & ~1;
+        // Szerokość podzielna przez 16 – wtedy bufor ekranu nie ma "zapasu" na końcu
+        // wiersza i klatki nie trzeba kopiować przed kodowaniem JPEG.
+        int w = Math.max(16, Math.round(m.widthPixels * scale) & ~15);
+        int h = Math.round(w * (float) m.heightPixels / m.widthPixels) & ~1;
         if (reader != null && w == width && h == height) return false;
         width = w;
         height = h;
@@ -341,6 +343,7 @@ public class ScreenService extends Service {
 
     private void serve(Socket s) {
         clients.incrementAndGet();
+        boolean counted = true;
         try {
             s.setTcpNoDelay(true);
             s.setSoTimeout(5000);
@@ -365,6 +368,26 @@ public class ScreenService extends Service {
                         .getBytes(LATIN1));
                 out.write(info);
                 out.flush();
+                return;
+            }
+
+            if (path.startsWith("/ctl")) {
+                // Stałe połączenie sterujące: po nagłówku każda linia to jedno polecenie
+                // w formacie zapytania (np. "a=move&x=0.5&y=0.4"). Mniejsze opóźnienie
+                // niż osobne zapytanie HTTP na każdy ruch myszy.
+                clients.decrementAndGet(); // to nie jest widz obrazu
+                counted = false;
+                out.write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n".getBytes(LATIN1));
+                out.flush();
+                String last = null;
+                while (!stopping && (line = in.readLine()) != null) {
+                    String r = handleControl("/control?" + line);
+                    if (!r.equals(last)) {
+                        out.write((r + "\n").getBytes(LATIN1));
+                        out.flush();
+                        last = r;
+                    }
+                }
                 return;
             }
 
@@ -395,6 +418,10 @@ public class ScreenService extends Service {
                 return;
             }
 
+            try {
+                s.setSendBufferSize(128 * 1024);
+            } catch (Exception ignored) {
+            }
             out.write(("HTTP/1.1 200 OK\r\n"
                     + "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n"
                     + "Cache-Control: no-cache\r\nConnection: close\r\n\r\n").getBytes(LATIN1));
@@ -418,7 +445,7 @@ public class ScreenService extends Service {
             }
         } catch (Exception ignored) {
         } finally {
-            clients.decrementAndGet();
+            if (counted) clients.decrementAndGet();
             try {
                 s.close();
             } catch (IOException ignored) {
@@ -451,6 +478,15 @@ public class ScreenService extends Service {
         if (a == null) return "OK";
         try {
             switch (a) {
+                case "down":
+                    c.down(f(p, "x"), f(p, "y"));
+                    break;
+                case "move":
+                    c.move(f(p, "x"), f(p, "y"));
+                    break;
+                case "up":
+                    c.up(f(p, "x"), f(p, "y"));
+                    break;
                 case "tap":
                     c.tap(f(p, "x"), f(p, "y"));
                     break;

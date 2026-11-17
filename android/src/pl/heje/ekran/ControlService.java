@@ -3,7 +3,9 @@ package pl.heje.ekran;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.graphics.Path;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
@@ -87,6 +89,136 @@ public class ControlService extends AccessibilityService {
                 dispatchGesture(g, null, null);
             }
         });
+    }
+
+    // ------------------------------------------------------------ gest na żywo
+    // Palec "dotyka" ekranu od wciśnięcia przycisku myszy do jego puszczenia,
+    // a ruchy są wysyłane na bieżąco (Android 8+: StrokeDescription.continueStroke).
+    // Kolejny odcinek wysyłamy dopiero, gdy poprzedni się zakończy, a w międzyczasie
+    // zapamiętujemy tylko najnowszy punkt – dzięki temu gest nie "zostaje w tyle".
+
+    private GestureDescription.StrokeDescription liveStroke;
+    private boolean liveInFlight;
+    private float liveX, liveY;          // koniec ostatnio wysłanego odcinka (piksele)
+    private long liveTime;               // kiedy go wysłano
+    private boolean pendMove, pendUp;
+    private float pendX, pendY;
+    private int liveGen;                 // numer bieżącego gestu – stare wywołania zwrotne są ignorowane
+    // Android 7.x nie ma continueStroke – tam zbieramy punkty i wysyłamy całość przy puszczeniu.
+    private Path fallbackPath;
+    private long fallbackStart;
+
+    void down(final float rx, final float ry) {
+        main.post(new Runnable() {
+            @Override
+            public void run() {
+                float x = clamp(rx) * screenW(), y = clamp(ry) * screenH();
+                pendMove = pendUp = false;
+                if (Build.VERSION.SDK_INT < 26) {
+                    fallbackPath = new Path();
+                    fallbackPath.moveTo(x, y);
+                    fallbackStart = SystemClock.uptimeMillis();
+                    return;
+                }
+                Path p = new Path();
+                p.moveTo(x, y);
+                liveGen++;
+                liveInFlight = false;
+                liveStroke = new GestureDescription.StrokeDescription(p, 0, 1, true);
+                liveX = x;
+                liveY = y;
+                dispatchLive(liveStroke);
+            }
+        });
+    }
+
+    void move(final float rx, final float ry) {
+        main.post(new Runnable() {
+            @Override
+            public void run() {
+                float x = clamp(rx) * screenW(), y = clamp(ry) * screenH();
+                if (Build.VERSION.SDK_INT < 26) {
+                    if (fallbackPath != null) fallbackPath.lineTo(x, y);
+                    return;
+                }
+                if (liveStroke == null) return;
+                pendX = x;
+                pendY = y;
+                pendMove = true;
+                if (!liveInFlight) dispatchNextLive();
+            }
+        });
+    }
+
+    void up(final float rx, final float ry) {
+        main.post(new Runnable() {
+            @Override
+            public void run() {
+                float x = clamp(rx) * screenW(), y = clamp(ry) * screenH();
+                if (Build.VERSION.SDK_INT < 26) {
+                    if (fallbackPath == null) return;
+                    fallbackPath.lineTo(x, y);
+                    long dur = Math.max(1, Math.min(SystemClock.uptimeMillis() - fallbackStart, 10000));
+                    dispatchGesture(new GestureDescription.Builder().addStroke(
+                            new GestureDescription.StrokeDescription(fallbackPath, 0, dur)).build(), null, null);
+                    fallbackPath = null;
+                    return;
+                }
+                if (liveStroke == null) return;
+                pendX = x;
+                pendY = y;
+                pendUp = true;
+                if (!liveInFlight) dispatchNextLive();
+            }
+        });
+    }
+
+    private void dispatchNextLive() {
+        if (liveStroke == null || (!pendMove && !pendUp)) return;
+        boolean last = pendUp;
+        Path p = new Path();
+        p.moveTo(liveX, liveY);
+        if (pendX != liveX || pendY != liveY) p.lineTo(pendX, pendY);
+        long now = SystemClock.uptimeMillis();
+        long dur = Math.max(5, Math.min(now - liveTime, 100));
+        try {
+            liveStroke = liveStroke.continueStroke(p, 0, dur, !last);
+        } catch (Exception e) {
+            liveStroke = null;
+            return;
+        }
+        liveX = pendX;
+        liveY = pendY;
+        pendMove = pendUp = false;
+        GestureDescription.StrokeDescription s = liveStroke;
+        if (last) liveStroke = null;
+        dispatchLive(s);
+    }
+
+    private void dispatchLive(GestureDescription.StrokeDescription s) {
+        liveInFlight = true;
+        liveTime = SystemClock.uptimeMillis();
+        final int gen = liveGen;
+        boolean ok = dispatchGesture(new GestureDescription.Builder().addStroke(s).build(),
+                new GestureResultCallback() {
+                    @Override
+                    public void onCompleted(GestureDescription g) {
+                        if (gen != liveGen) return;
+                        liveInFlight = false;
+                        dispatchNextLive();
+                    }
+
+                    @Override
+                    public void onCancelled(GestureDescription g) {
+                        if (gen != liveGen) return;
+                        liveInFlight = false;
+                        liveStroke = null;
+                    }
+                }, main);
+        if (!ok) {
+            liveInFlight = false;
+            liveStroke = null;
+        }
     }
 
     private static float clamp(float v) {

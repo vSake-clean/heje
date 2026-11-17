@@ -4,18 +4,13 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"math"
-	"net/http"
 	"net/url"
 	"time"
 )
 
-// Wysyłanie poleceń sterujących do telefonu oraz zamiana ruchów myszy i
-// klawiatury na gesty. Wszystko leci przez zwykłe zapytania HTTP GET do
-// /control na telefonie, więc nie potrzeba żadnych bibliotek.
-
-var ctrlClient = &http.Client{Timeout: 2 * time.Second}
+// Zamiana ruchów myszy i klawiatury na polecenia dla telefonu. Polecenia lecą
+// stałym połączeniem (controller), a przeciąganie jest przekazywane na żywo:
+// wciśnięcie = palec na ekranie, ruch = przesuwanie, puszczenie = palec w górę.
 
 // mouseX / mouseY wyłuskują współrzędne kursora z parametru lParam komunikatu.
 func mouseX(lParam uintptr) int { return int(int16(lParam & 0xffff)) }
@@ -35,10 +30,17 @@ func (v *window) toPhone(mx, my int) (rx, ry float64, ok bool) {
 	}
 	rx = float64(mx-dx) / float64(dw)
 	ry = float64(my-dy) / float64(dh)
-	if rx < 0 || rx > 1 || ry < 0 || ry > 1 {
-		return 0, 0, false
+	return rx, ry, rx >= 0 && rx <= 1 && ry >= 0 && ry <= 1
+}
+
+func clamp01(f float64) float64 {
+	if f < 0 {
+		return 0
 	}
-	return rx, ry, true
+	if f > 1 {
+		return 1
+	}
+	return f
 }
 
 func (v *window) onPress(mx, my int) {
@@ -47,13 +49,23 @@ func (v *window) onPress(mx, my int) {
 		return
 	}
 	v.mu.Lock()
-	v.pressX, v.pressY, v.pressTime, v.dragging = rx, ry, time.Now(), true
+	v.dragging = true
+	v.lastMove = time.Now()
 	v.mu.Unlock()
 	pSetCapture.Call(v.hwnd)
+	v.sendControl(fmt.Sprintf("a=down&x=%.4f&y=%.4f", rx, ry))
 }
 
 func (v *window) onMove(mx, my int) {
-	// Gest wysyłamy dopiero przy puszczeniu przycisku; ruch nie wymaga akcji.
+	v.mu.Lock()
+	if !v.dragging || time.Since(v.lastMove) < 12*time.Millisecond {
+		v.mu.Unlock()
+		return
+	}
+	v.lastMove = time.Now()
+	v.mu.Unlock()
+	rx, ry, _ := v.toPhone(mx, my)
+	v.sendControl(fmt.Sprintf("a=move&x=%.4f&y=%.4f", clamp01(rx), clamp01(ry)))
 }
 
 func (v *window) onRelease(mx, my int) {
@@ -63,31 +75,10 @@ func (v *window) onRelease(mx, my int) {
 		return
 	}
 	v.dragging = false
-	x1, y1, t0 := v.pressX, v.pressY, v.pressTime
 	v.mu.Unlock()
 	pReleaseCapture.Call()
-
-	x2, y2, ok := v.toPhone(mx, my)
-	if !ok {
-		x2, y2 = x1, y1
-	}
-	dt := time.Since(t0)
-	dist := math.Hypot(x2-x1, y2-y1)
-
-	switch {
-	case dist < 0.02 && dt >= 450*time.Millisecond:
-		v.sendControl(fmt.Sprintf("a=long&x=%.4f&y=%.4f", x1, y1))
-	case dist < 0.02:
-		v.sendControl(fmt.Sprintf("a=tap&x=%.4f&y=%.4f", x1, y1))
-	default:
-		ms := dt.Milliseconds()
-		if ms < 50 {
-			ms = 50
-		} else if ms > 800 {
-			ms = 800
-		}
-		v.sendControl(fmt.Sprintf("a=swipe&x=%.4f&y=%.4f&x2=%.4f&y2=%.4f&t=%d", x1, y1, x2, y2, ms))
-	}
+	rx, ry, _ := v.toPhone(mx, my)
+	v.sendControl(fmt.Sprintf("a=up&x=%.4f&y=%.4f", clamp01(rx), clamp01(ry)))
 }
 
 // onWheel zamienia obrót kółka na przewinięcie (szybki przesuw palca w pionie).
@@ -121,30 +112,22 @@ func (v *window) sendKey(k string) {
 	v.sendControl("a=key&k=" + k)
 }
 
-// sendControl wysyła polecenie do telefonu w tle, żeby nie blokować okna.
-func (v *window) sendControl(query string) {
-	v.mu.Lock()
-	addr := v.ctrlAddr
-	v.mu.Unlock()
-	if addr == "" {
-		return
+func (v *window) sendControl(cmd string) {
+	if v.ctrl != nil {
+		v.ctrl.send(cmd)
 	}
-	go func() {
-		resp, err := ctrlClient.Get("http://" + addr + "/control?" + query)
-		if err != nil {
-			return
-		}
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64))
-		resp.Body.Close()
-		if string(body) == "NOACCESS" {
-			v.mu.Lock()
-			first := !v.warned
-			v.warned = true
-			v.mu.Unlock()
-			if first {
-				v.setStatus("Włącz sterowanie na telefonie: Ustawienia → Ułatwienia dostępu → " +
-					"„Ekran na PC - sterowanie”.")
-			}
-		}
-	}()
+}
+
+// onControlAccess pokazuje podpowiedź, gdy na telefonie nie włączono sterowania.
+func (v *window) onControlAccess(ok bool) {
+	v.mu.Lock()
+	first := !ok && !v.warned
+	if !ok {
+		v.warned = true
+	}
+	v.mu.Unlock()
+	if first {
+		v.setStatus("Włącz sterowanie na telefonie: Ustawienia → Ułatwienia dostępu → " +
+			"„Ekran na PC - sterowanie”.")
+	}
 }
